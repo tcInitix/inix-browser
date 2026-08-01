@@ -1,5 +1,10 @@
 ; Inix NSIS customization — branding, update-safe shutdown, install activity log.
 
+; _CHECK_APP_RUNNING (via customCheckAppRunning) needs GetProcessInfo; include it here
+; because this file is parsed before allowOnlyOneInstallerInstance.nsh.
+!include "getProcessInfo.nsh"
+Var pid
+
 ; Show the details console on the Installing page (electron-builder hides it by default).
 ShowUninstDetails show
 !define MUI_UNINSTFILESPAGE_SHOWDETAILS
