@@ -12,6 +12,30 @@ interface UpdatePromptProps {
   onDismiss: () => void;
 }
 
+function looksLikeTechnicalDump(text: string): boolean {
+  const lower = text.toLowerCase();
+  return (
+    lower.includes('"statuscode"') ||
+    lower.includes("httpexecutor") ||
+    lower.includes("x-github-request-id") ||
+    lower.includes("content-security-policy") ||
+    lower.includes("app.asar")
+  );
+}
+
+function safeNotes(notes?: string): string | undefined {
+  if (!notes?.trim()) return undefined;
+  if (looksLikeTechnicalDump(notes)) return undefined;
+  return notes.trim();
+}
+
+function safeError(message: string): string {
+  if (looksLikeTechnicalDump(message)) {
+    return "Something went wrong while fetching the update. Try again from Settings → Data.";
+  }
+  return message.length > 240 ? `${message.slice(0, 240)}…` : message;
+}
+
 export function UpdatePrompt({ state, onDownload, onInstall, onDismiss }: UpdatePromptProps) {
   if (state.status === "idle") return null;
 
@@ -55,7 +79,7 @@ export function UpdatePrompt({ state, onDownload, onInstall, onDismiss }: Update
       <div className="permission-overlay">
         <div className="permission-prompt update-prompt">
           <h3>Update failed</h3>
-          <p>{state.message}</p>
+          <p>{safeError(state.message)}</p>
           <div className="permission-actions">
             <button type="button" className="permission-allow" onClick={onDismiss}>
               OK
@@ -66,6 +90,8 @@ export function UpdatePrompt({ state, onDownload, onInstall, onDismiss }: Update
     );
   }
 
+  const notes = safeNotes(state.releaseNotes);
+
   return (
     <div className="permission-overlay">
       <div className="permission-prompt update-prompt">
@@ -73,9 +99,11 @@ export function UpdatePrompt({ state, onDownload, onInstall, onDismiss }: Update
         <p>
           Inix <strong>{state.version}</strong> is available. You are on the current installed build.
         </p>
-        {state.releaseNotes ? (
-          <pre className="update-release-notes">{state.releaseNotes.slice(0, 500)}</pre>
-        ) : null}
+        {notes ? (
+          <div className="update-release-notes">{notes}</div>
+        ) : (
+          <p className="settings-note">See the release on GitHub for what&apos;s new.</p>
+        )}
         <div className="permission-actions">
           <button type="button" className="permission-deny" onClick={onDismiss}>
             Not now

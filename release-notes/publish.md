@@ -1,21 +1,23 @@
-# Inix v0.1.1
+# Inix v0.1.2
 
-_Faster browsing and improved security for all users._
+Improve update UI to keep it human-readable.
 
 ## What's new
-* Panic mode: instantly swap to safe tabs, then swap back
-* Improved onboarding flow for first-time users
-* Enhanced privacy settings and vault management
-* New shortcuts for quick access
+### Update UI improvements
+
+Update checks now show a friendly error message when the update fails due to a server-side issue.
 
 ## Improvements
-* Faster browser startup and loading times
-* Improved security patches and updates
-* Polished UI and UX throughout the app
+### AutoUpdater API updates
+
+The `resolveReleaseNotes` function has been added to handle technical dump errors. This ensures that users still get helpful error messages without being exposed to raw HTTP JSON.
 
 ## Fixes
-* Bug fixes for crashes and freezing issues on Windows
+### Bug fixes
+
+Fixed an issue with update notes not showing up properly when the release notes were a technical dump. This fix also ensures that non-technical updates are now truncated at 4000 characters as expected.
 
 ## Notes
-* Panic mode is enabled by default; you can toggle it from the title bar or Ctrl+Shift+P.
-* Bookmark bar behavior and history syncing have been improved.
+### New feature: GitHub release body parsing
+
+The autoUpdater now fetches and parses the release body from GitHub's API, making it easier to show actual update notes without exposing raw data to users.

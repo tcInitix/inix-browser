@@ -1,8 +1,16 @@
 import { app } from "electron";
 import { autoUpdater } from "electron-updater";
 import type { BrowserWindow } from "electron";
+import {
+  friendlyUpdateError,
+  fetchGithubReleaseBody,
+  normalizeReleaseNotes,
+} from "./updater-text";
 
 let getWindow: (() => BrowserWindow | null) | null = null;
+
+const GITHUB_OWNER = "tcInitix";
+const GITHUB_REPO = "inix-browser";
 
 function send(channel: string, payload?: unknown): void {
   getWindow?.()?.webContents.send(channel, payload);
@@ -19,8 +27,16 @@ function isSilentUpdateError(message: string): boolean {
     m.includes("enotfound") ||
     m.includes("econnrefused") ||
     m.includes("latest.yml") ||
-    m.includes("unable to find latest version")
+    m.includes("unable to find latest version") ||
+    m.includes('"statuscode"') ||
+    m.includes("createhttperror")
   );
+}
+
+async function resolveReleaseNotes(version: string, fromUpdater: unknown): Promise<string | undefined> {
+  const direct = normalizeReleaseNotes(fromUpdater);
+  if (direct) return direct;
+  return fetchGithubReleaseBody(GITHUB_OWNER, GITHUB_REPO, version);
 }
 
 export function initAutoUpdater(windowGetter: () => BrowserWindow | null): void {
@@ -32,15 +48,13 @@ export function initAutoUpdater(windowGetter: () => BrowserWindow | null): void 
   autoUpdater.autoInstallOnAppQuit = false;
 
   autoUpdater.on("update-available", (info) => {
-    send("update:available", {
-      version: info.version,
-      releaseNotes:
-        typeof info.releaseNotes === "string"
-          ? info.releaseNotes
-          : Array.isArray(info.releaseNotes)
-            ? info.releaseNotes.map((n) => n.note).join("\n")
-            : "",
-    });
+    void (async () => {
+      const releaseNotes = await resolveReleaseNotes(info.version, info.releaseNotes);
+      send("update:available", {
+        version: info.version,
+        releaseNotes: releaseNotes ?? "",
+      });
+    })();
   });
 
   autoUpdater.on("update-not-available", () => {
@@ -57,7 +71,7 @@ export function initAutoUpdater(windowGetter: () => BrowserWindow | null): void 
 
   autoUpdater.on("error", (err) => {
     if (isSilentUpdateError(err.message)) return;
-    console.warn("[updater]", err.message);
+    console.warn("[updater]", err.message.slice(0, 200));
   });
 
   setTimeout(() => {
@@ -85,8 +99,8 @@ export async function checkForUpdatesManual(): Promise<{ ok: boolean; error?: st
     await autoUpdater.checkForUpdates();
     return { ok: true };
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Update check failed";
-    if (isSilentUpdateError(message)) {
+    const message = friendlyUpdateError(err);
+    if (!message || isSilentUpdateError(message)) {
       return { ok: true };
     }
     return { ok: false, error: message };
@@ -98,7 +112,7 @@ export async function downloadUpdate(): Promise<{ ok: boolean; error?: string }>
     await autoUpdater.downloadUpdate();
     return { ok: true };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Download failed" };
+    return { ok: false, error: friendlyUpdateError(err) };
   }
 }
 
