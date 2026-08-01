@@ -1,0 +1,60 @@
+{
+  "name": "inix-browser",
+  "version": "0.1.0",
+  "description": "Inix — a fast, private browser",
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build && electron-builder",
+    "build:inix": "vite build && electron-builder",
+    "release": "tsc && vite build && electron-builder --publish always",
+    "release:patch": "npm version patch && npm run release",
+    "preview": "vite preview",
+    "postinstall": "node node_modules/electron/install.js",
+    "setup": "powershell -ExecutionPolicy Bypass -File scripts/setup-inix.ps1"
+  },
+  "author": "Jayme Anthony",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/YOUR_GITHUB_USERNAME/inix-browser.git"
+  },
+  "dependencies": {
+    "@mozilla/readability": "^0.6.0",
+    "@xyflow/react": "^12.11.2",
+    "electron-updater": "^6.8.9",
+    "jsdom": "^30.0.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "sql.js": "^1.14.1"
+  },
+  "devDependencies": {
+    "@types/jsdom": "^28.0.3",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@types/sql.js": "^1.4.11",
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^34.0.0",
+    "electron-builder": "^25.1.8",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.6",
+    "vite-plugin-electron": "^0.28.8",
+    "vite-plugin-electron-renderer": "^0.14.6"
+  },
+  "build": {
+    "appId": "com.inix.browser",
+    "productName": "Inix",
+    "directories": {
+      "output": "release"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "public/icon.png"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "YOUR_GITHUB_USERNAME",
+      "repo": "inix-browser"
+    }
+  }
+}

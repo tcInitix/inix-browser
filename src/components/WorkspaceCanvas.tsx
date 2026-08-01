@@ -1,0 +1,120 @@
+import { useCallback, useEffect, useMemo, useRef } from "react";
+import {
+  ReactFlow,
+  Background,
+  Controls,
+  MiniMap,
+  useNodesState,
+  type Node,
+  type NodeTypes,
+} from "@xyflow/react";
+import "@xyflow/react/dist/style.css";
+import type { CanvasBookmark, WorkspaceCanvas } from "../inix.d";
+import { BookmarkCardNode, type BookmarkNodeData } from "./BookmarkCard";
+
+interface WorkspaceCanvasProps {
+  canvas: WorkspaceCanvas | null;
+  faviconCache: Record<number, string | null>;
+  onOpen: (url: string) => void;
+  onOpenArchive: (id: number) => void;
+  onRemovePin: (bookmarkId: number) => void;
+  onPinMove: (bookmarkId: number, x: number, y: number) => void;
+  onViewportChange: (x: number, y: number, zoom: number) => void;
+}
+
+const nodeTypes: NodeTypes = {
+  bookmark: BookmarkCardNode as NodeTypes[string],
+};
+
+function toNodes(
+  pins: CanvasBookmark[],
+  faviconCache: Record<number, string | null>,
+  handlers: Omit<BookmarkNodeData, "bookmark" | "faviconUrl">
+): Node[] {
+  return pins.map((pin) => ({
+    id: String(pin.id),
+    type: "bookmark",
+    position: { x: pin.pin_x, y: pin.pin_y },
+    data: {
+      bookmark: pin,
+      faviconUrl: faviconCache[pin.id],
+      ...handlers,
+    } as BookmarkNodeData,
+    style: { width: pin.pin_width, height: pin.pin_height },
+  }));
+}
+
+export function WorkspaceCanvasView({
+  canvas,
+  faviconCache,
+  onOpen,
+  onOpenArchive,
+  onRemovePin,
+  onPinMove,
+  onViewportChange,
+}: WorkspaceCanvasProps) {
+  const handlers = useMemo(
+    () => ({ onOpen, onOpenArchive, onRemovePin }),
+    [onOpen, onOpenArchive, onRemovePin]
+  );
+
+  const initialNodes = useMemo(
+    () => (canvas ? toNodes(canvas.pins, faviconCache, handlers) : []),
+    [canvas, faviconCache, handlers]
+  );
+
+  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  useEffect(() => {
+    setNodes(canvas ? toNodes(canvas.pins, faviconCache, handlers) : []);
+  }, [canvas, faviconCache, handlers, setNodes]);
+
+  const onNodeDragStop = useCallback(
+    (_: unknown, node: Node) => {
+      const id = parseInt(node.id, 10);
+      if (!Number.isNaN(id)) onPinMove(id, node.position.x, node.position.y);
+    },
+    [onPinMove]
+  );
+
+  const onMoveEnd = useCallback(
+    (_: unknown, viewport: { x: number; y: number; zoom: number }) => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(() => {
+        onViewportChange(viewport.x, viewport.y, viewport.zoom);
+      }, 300);
+    },
+    [onViewportChange]
+  );
+
+  if (!canvas) {
+    return <p className="library-loading">Loading workspace…</p>;
+  }
+
+  return (
+    <div className="workspace-canvas-wrap">
+      <ReactFlow
+        nodes={nodes}
+        edges={[]}
+        onNodesChange={onNodesChange}
+        onNodeDragStop={onNodeDragStop}
+        onMoveEnd={onMoveEnd}
+        nodeTypes={nodeTypes}
+        defaultViewport={{
+          x: canvas.workspace.viewport_x,
+          y: canvas.workspace.viewport_y,
+          zoom: canvas.workspace.zoom,
+        }}
+        fitView={canvas.pins.length === 0}
+        minZoom={0.2}
+        maxZoom={2}
+        proOptions={{ hideAttribution: true }}
+      >
+        <Background gap={20} size={1} className="canvas-grid" />
+        <Controls showInteractive={false} />
+        <MiniMap pannable zoomable className="canvas-minimap" />
+      </ReactFlow>
+    </div>
+  );
+}
