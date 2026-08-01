@@ -135,6 +135,25 @@ export async function downloadUpdate(): Promise<{ ok: boolean; error?: string }>
 }
 
 export function installUpdate(): void {
+  // #region agent log
+  fetch("http://127.0.0.1:7739/ingest/d90232b9-19d1-4d2a-94ef-8026e7c61f82", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "7afe24" },
+    body: JSON.stringify({
+      sessionId: "7afe24",
+      hypothesisId: "H5",
+      location: "updater.ts:installUpdate",
+      message: "installUpdate invoked",
+      data: {
+        version: app.getVersion(),
+        windowCount: BrowserWindow.getAllWindows().length,
+        quittingForUpdate,
+      },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+  // #endregion
+
   quittingForUpdate = true;
   beforeInstallHook?.();
 
@@ -146,8 +165,37 @@ export function installUpdate(): void {
     win.destroy();
   }
 
+  // #region agent log
+  fetch("http://127.0.0.1:7739/ingest/d90232b9-19d1-4d2a-94ef-8026e7c61f82", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "7afe24" },
+    body: JSON.stringify({
+      sessionId: "7afe24",
+      hypothesisId: "H5",
+      location: "updater.ts:installUpdate",
+      message: "windows destroyed, scheduling quitAndInstall",
+      data: { windowCount: BrowserWindow.getAllWindows().length },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+  // #endregion
+
   // Let BrowserViews and renderer processes exit before NSIS checks for a running app.
   setTimeout(() => {
+    // #region agent log
+    fetch("http://127.0.0.1:7739/ingest/d90232b9-19d1-4d2a-94ef-8026e7c61f82", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "7afe24" },
+      body: JSON.stringify({
+        sessionId: "7afe24",
+        hypothesisId: "H5",
+        location: "updater.ts:installUpdate",
+        message: "calling quitAndInstall",
+        data: {},
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
     autoUpdater.quitAndInstall(false, true);
   }, 2000);
 }

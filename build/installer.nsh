@@ -5,6 +5,80 @@
 !include "getProcessInfo.nsh"
 Var pid
 
+!ifndef BUILD_UNINSTALLER
+  ; #region agent log — install debug log ($TEMP\inix-debug-7afe24.log)
+  Function inixWriteDebugLog
+    Exch $0
+    Push $1
+    ClearErrors
+    FileOpen $1 "$TEMP\inix-debug-7afe24.log" a
+    IfErrors inixWriteDebugLogSkip
+    FileSeek $1 0 END
+    FileWrite $1 "$0$\r$\n"
+    FileClose $1
+    inixWriteDebugLogSkip:
+    DetailPrint "$0"
+    Pop $1
+    Pop $0
+  FunctionEnd
+
+  Function inixRetryUninstallInPlace
+    Push $R1
+    Push $R2
+    Push $R3
+    Push $R4
+
+    ReadRegStr $R1 SHELL_CONTEXT "${UNINSTALL_REGISTRY_KEY}" UninstallString
+    ${If} $R1 == ""
+      Push "H1:retry-skip no-uninstall-string"
+      Call inixWriteDebugLog
+      Goto inixRetryUninstallDone
+    ${EndIf}
+
+    Push $R1
+    Call GetInQuotes
+    Pop $R2
+
+    ReadRegStr $R3 SHELL_CONTEXT "${INSTALL_REGISTRY_KEY}" InstallLocation
+    ${If} $R3 == ""
+      Push $R2
+      Call GetFileParent
+      Pop $R3
+    ${EndIf}
+
+    StrCpy $R4 "/S /KEEP_APP_DATA --updated"
+    ${if} $installMode == "CurrentUser"
+      StrCpy $R4 "$R4 /currentuser"
+    ${else}
+      StrCpy $R4 "$R4 /allusers"
+    ${endif}
+
+    Push "H1:retry-inplace path=$R2 inst=$R3"
+    Call inixWriteDebugLog
+    DetailPrint "Retrying previous-version uninstall in place..."
+    ExecWait '"$R2" $R4 _?=$R3' $R0
+    Push "H1:retry-inplace-exit code=$R0"
+    Call inixWriteDebugLog
+
+    ${If} $R0 != 0
+      DetailPrint "In-place uninstall failed ($R0). Closing ${PRODUCT_NAME} and clearing install folder..."
+      !insertmacro _CHECK_APP_RUNNING
+      SetOutPath $TEMP
+      RMDir /r "$R3"
+      Push "H3:fallback-rmdir inst=$R3 after=$R0"
+      Call inixWriteDebugLog
+      StrCpy $R0 0
+    ${EndIf}
+
+    inixRetryUninstallDone:
+    Pop $R4
+    Pop $R3
+    Pop $R2
+    Pop $R1
+  FunctionEnd
+  ; #endregion
+!endif
+
 ; Show the details console on the Installing page (electron-builder hides it by default).
 ShowUninstDetails show
 !define MUI_UNINSTFILESPAGE_SHOWDETAILS
@@ -48,10 +122,41 @@ ShowUninstDetails show
 !macro customCheckAppRunning
   SetDetailsPrint both
   DetailPrint "Checking for running ${PRODUCT_NAME}..."
+  !ifndef BUILD_UNINSTALLER
+    Push "H2:check-app-running start"
+    Call inixWriteDebugLog
+  !endif
   ; Use electron-builder's default close/retry logic (PID-safe, per-user aware).
   !insertmacro _CHECK_APP_RUNNING
+  !ifndef BUILD_UNINSTALLER
+    Push "H2:check-app-running done"
+    Call inixWriteDebugLog
+  !endif
   DetailPrint "Ready to install ${PRODUCT_NAME} ${VERSION}."
 !macroend
+
+!ifndef BUILD_UNINSTALLER
+  !macro preInit
+    Push "H0:preInit version=${VERSION}"
+    Call inixWriteDebugLog
+  !macroend
+
+  !macro customUnInstallCheck
+    Push "H4:uninstall-old-version-exit code=$R0"
+    Call inixWriteDebugLog
+    ${If} $R0 == 0
+      Goto inixUninstallCheckOk
+    ${EndIf}
+    Call inixRetryUninstallInPlace
+    Push "H4:uninstall-after-retry code=$R0"
+    Call inixWriteDebugLog
+    inixUninstallCheckOk:
+  !macroend
+
+  !macro customUnInstallCheckCurrentUser
+    !insertmacro customUnInstallCheck
+  !macroend
+!endif
 
 !macro customFiles_x64
   DetailPrint "Extracting 64-bit application package..."
