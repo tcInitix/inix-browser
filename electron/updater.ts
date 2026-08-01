@@ -146,8 +146,8 @@ export function installUpdate(): void {
     win.destroy();
   }
 
-  // Let BrowserViews/renderer processes exit before NSIS checks for a running app.
+  // Let BrowserViews and renderer processes exit before NSIS checks for a running app.
   setTimeout(() => {
     autoUpdater.quitAndInstall(false, true);
-  }, 750);
+  }, 2000);
 }

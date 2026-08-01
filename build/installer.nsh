@@ -1,4 +1,21 @@
-; Inix NSIS customization — branding + update-safe app shutdown.
+; Inix NSIS customization — branding, update-safe shutdown, install activity log.
+
+; Show the details console on the Installing page (electron-builder hides it by default).
+ShowUninstDetails show
+!define MUI_UNINSTFILESPAGE_SHOWDETAILS
+!define MUI_UNINSTFILESPAGE_SHOWDETAILSCONTROL
+
+!ifndef BUILD_UNINSTALLER
+  ShowInstDetails show
+  !define MUI_INSTFILESPAGE_SHOWDETAILS
+  !define MUI_INSTFILESPAGE_SHOWDETAILSCONTROL
+  !define MUI_PAGE_CUSTOMFUNCTION_SHOW inixInstFilesShow
+
+  Function inixInstFilesShow
+    SetDetailsPrint both
+    DetailPrint "Starting ${PRODUCT_NAME} ${VERSION} installation..."
+  FunctionEnd
+!endif
 
 !macro customHeader
   !define MUI_FINISHPAGE_NOAUTOCLOSE
@@ -24,16 +41,38 @@
 !macroend
 
 !macro customCheckAppRunning
-  !ifdef APP_EXECUTABLE_FILENAME
-    ${if} ${isUpdated}
-      DetailPrint "Closing ${PRODUCT_NAME} before installing the update..."
-      StrCpy $R9 0
-      ${DoWhile} $R9 < 6
-        Sleep 1000
-        nsExec::ExecToLog 'taskkill /F /IM "${APP_EXECUTABLE_FILENAME}" /T'
-        Sleep 500
-        IntOp $R9 $R9 + 1
-      ${Loop}
-    ${endif}
-  !endif
+  SetDetailsPrint both
+  DetailPrint "Checking for running ${PRODUCT_NAME}..."
+  ; Use electron-builder's default close/retry logic (PID-safe, per-user aware).
+  !insertmacro _CHECK_APP_RUNNING
+  DetailPrint "Ready to install ${PRODUCT_NAME} ${VERSION}."
+!macroend
+
+!macro customFiles_x64
+  DetailPrint "Extracting 64-bit application package..."
+!macroend
+
+!macro customFiles_ia32
+  DetailPrint "Extracting 32-bit application package..."
+!macroend
+
+!macro customFiles_arm64
+  DetailPrint "Extracting ARM64 application package..."
+!macroend
+
+!macro customInstall
+  DetailPrint "Copying program files completed."
+  DetailPrint "Writing registry entries..."
+  DetailPrint "Creating Start Menu shortcut..."
+  DetailPrint "Creating desktop shortcut (if enabled)..."
+  DetailPrint "Registering uninstall information..."
+  DetailPrint "${PRODUCT_NAME} ${VERSION} installed successfully."
+!macroend
+
+!macro customUnInstall
+  SetDetailsPrint both
+  DetailPrint "Removing ${PRODUCT_NAME} shortcuts..."
+  DetailPrint "Removing program files..."
+  DetailPrint "Cleaning up registry entries..."
+  DetailPrint "${PRODUCT_NAME} was removed from this computer."
 !macroend

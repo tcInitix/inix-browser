@@ -45,6 +45,7 @@ function InlineMarkdown({ text }: { text: string }) {
   );
 }
 
+const HEADING_RE = /^(#{1,3})\s+(.+)$/;
 const BULLET_LINE_RE = /^(\s*)[*\-]\s+(.+)$/;
 const NUMBERED_LINE_RE = /^(\s*)\d+\.\s+(.+)$/;
 
@@ -92,8 +93,22 @@ export function MarkdownText({ text }: { text: string }) {
   };
 
   for (const line of lines) {
+    const headingMatch = line.match(HEADING_RE);
     const bulletMatch = line.match(BULLET_LINE_RE);
     const numberedMatch = line.match(NUMBERED_LINE_RE);
+
+    if (headingMatch) {
+      flushLists();
+      const level = headingMatch[1].length;
+      const headingClass =
+        level === 1 ? "ai-md-h1" : level === 2 ? "ai-md-h2" : "ai-md-h3";
+      blocks.push(
+        <div key={key++} className={headingClass}>
+          <InlineMarkdown text={headingMatch[2]} />
+        </div>
+      );
+      continue;
+    }
 
     if (bulletMatch) {
       flushNumbered();

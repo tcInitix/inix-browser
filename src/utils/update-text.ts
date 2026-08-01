@@ -38,3 +38,12 @@ export function friendlyUpdateError(message: string): string {
   if (firstLine.length <= 180) return firstLine;
   return `${firstLine.slice(0, 180)}…`;
 }
+
+/** Drop duplicate title lines already shown in the update dialog header. */
+export function prepareReleaseNotes(notes: string, version: string): string {
+  const escaped = version.replace(/\./g, "\\.");
+  return notes
+    .replace(new RegExp(`^#\\s*Inix\\s*v?${escaped}\\s*\\n+`, "i"), "")
+    .replace(/^#\s+.+\n+/i, "")
+    .trim();
+}
