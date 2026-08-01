@@ -362,7 +362,7 @@ export function SettingsPage({ onNavigate, onAliasesChanged, onBookmarkBarChange
       </label>
     ) : (
       <p className="settings-note">
-        Chrome was not detected. You can still choose a Bookmarks or password CSV file manually.
+        Chrome was not detected. You can still choose a bookmarks HTML export or password CSV file manually.
       </p>
     );
 
@@ -385,12 +385,13 @@ export function SettingsPage({ onNavigate, onAliasesChanged, onBookmarkBarChange
           disabled={importingBookmarks}
           onClick={() => void importChromeBookmarks(true)}
         >
-          Choose Bookmarks file…
+          Choose bookmarks file…
         </button>
       </div>
       <p className="settings-note">
-        Items on Chrome&apos;s bookmarks bar are added to Inix&apos;s bar. Close Chrome if import
-        fails because files are locked.
+        Items on Chrome&apos;s bookmarks bar are added to Inix&apos;s bar. For manual import, use
+        Chrome&apos;s HTML export (Bookmark Manager → ⋮ → Export bookmarks). Close Chrome if profile
+        import fails because files are locked.
       </p>
     </div>
   );

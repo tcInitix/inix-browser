@@ -34,7 +34,7 @@ export function registerImportHandlers(): void {
     const opts = {
       title: "Select Chrome Bookmarks file",
       filters: [
-        { name: "Bookmarks", extensions: ["json"] },
+        { name: "Bookmarks", extensions: ["html", "htm", "json"] },
         { name: "All files", extensions: ["*"] },
       ],
       properties: ["openFile"] as ("openFile")[],
