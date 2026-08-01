@@ -1,17 +1,20 @@
 {
   "name": "inix-browser",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Inix — a fast, private browser",
+  "homepage": "https://github.com/tcInitix/inix-browser",
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build && electron-builder",
+    "build": "npm run installer:assets && tsc && vite build && electron-builder",
+    "installer:assets": "powershell -ExecutionPolicy Bypass -File scripts/generate-installer-assets.ps1",
     "build:inix": "vite build && electron-builder",
     "release": "node scripts/release.mjs",
-    "release:local": "tsc && vite build && electron-builder",
+    "release:local": "npm run installer:assets && tsc && vite build && electron-builder",
     "release:publish": "node scripts/release.mjs",
     "release:notes": "node scripts/generate-release-notes.mjs",
     "release:notes:ps1": "powershell -ExecutionPolicy Bypass -File scripts/release-notes.ps1",
+    "release:fix-notes": "node scripts/release.mjs --notes-only --skip-notes",
     "preview": "vite preview",
     "postinstall": "node node_modules/electron/install.js",
     "setup": "powershell -ExecutionPolicy Bypass -File scripts/setup-inix.ps1"
@@ -55,6 +58,23 @@
       "icon": "public/icon.png",
       "signAndEditExecutable": false
     },
+    "nsis": {
+      "include": "build/installer.nsh",
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Inix",
+      "installerSidebar": "build/installerSidebar.bmp",
+      "installerHeader": "build/installerHeader.bmp",
+      "installerIcon": "build/installerIcon.ico",
+      "uninstallerSidebar": "build/uninstallerSidebar.bmp",
+      "uninstallerIcon": "build/uninstallerIcon.ico",
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false
+    },
     "forceCodeSigning": false,
     "releaseInfo": {
       "releaseNotesFile": "release-notes/publish.md"
@@ -62,7 +82,8 @@
     "publish": {
       "provider": "github",
       "owner": "tcInitix",
-      "repo": "inix-browser"
+      "repo": "inix-browser",
+      "releaseType": "release"
     }
   }
 }

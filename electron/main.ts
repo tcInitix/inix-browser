@@ -36,6 +36,8 @@ import {
   checkForUpdatesManual,
   downloadUpdate,
   installUpdate,
+  setUpdateInstallHook,
+  isQuittingForUpdate,
 } from "./updater";
 
 declare global {
@@ -261,6 +263,13 @@ async function bootstrap() {
     startTabFreezer();
     registerMainIpcHandlers();
     initAutoUpdater(() => mainWindow);
+    setUpdateInstallHook(() => {
+      tabManager.shutdownForUpdate();
+      for (const win of BrowserWindow.getAllWindows()) {
+        if (win.isDestroyed()) continue;
+        win.removeAllListeners("close");
+      }
+    });
   }
 
   createWindow();
@@ -275,6 +284,7 @@ app.on("activate", () => {
 });
 
 app.on("before-quit", () => {
+  if (isQuittingForUpdate()) return;
   purgeOnAppClose();
   sessionManager.flush(true);
   stopTabFreezer();

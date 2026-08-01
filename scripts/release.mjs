@@ -17,6 +17,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { bumpPatchVersion, runGenerateReleaseNotes } from "./generate-release-notes.mjs";
+import { updateGithubReleaseFromFile } from "./github-release.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
@@ -29,6 +30,7 @@ function parseArgs(argv) {
     noGit: false,
     skipNotes: false,
     dryRun: false,
+    notesOnly: false,
     model: DEFAULT_MODEL,
   };
   for (const arg of argv) {
@@ -36,6 +38,7 @@ function parseArgs(argv) {
     else if (arg === "--no-git") opts.noGit = true;
     else if (arg === "--skip-notes") opts.skipNotes = true;
     else if (arg === "--dry-run") opts.dryRun = true;
+    else if (arg === "--notes-only") opts.notesOnly = true;
     else if (arg === "--help" || arg === "-h") {
       console.log(`Inix release — bump version, notes, build, GitHub publish
 
@@ -45,6 +48,7 @@ Options:
   --no-push       Skip git push after publish
   --no-git        Skip git commit and tag
   --skip-notes    Skip Ollama; use existing release-notes/publish.md
+  --notes-only    Only upload notes to the current package.json version on GitHub (no build)
   --dry-run       Preview version + notes only, no build or publish
   -h, --help      Show this help
 
@@ -173,8 +177,41 @@ function gitPush(version, opts) {
   run("git", ["push", "origin", `v${version}`]);
 }
 
+async function publishNotesToGithub(version) {
+  if (!fs.existsSync(PUBLISH_NOTES)) {
+    throw new Error(`Missing ${path.relative(ROOT, PUBLISH_NOTES)}`);
+  }
+  console.log("Uploading release notes to GitHub…");
+  const result = await updateGithubReleaseFromFile({
+    version,
+    notesPath: PUBLISH_NOTES,
+    token: process.env.GH_TOKEN,
+    publish: true,
+  });
+  console.log(`GitHub release updated: ${result.htmlUrl}`);
+  if (result.draft) {
+    console.warn("Release is still marked as draft on GitHub.");
+  }
+}
+
 async function main() {
   const opts = parseArgs(process.argv.slice(2));
+
+  if (opts.notesOnly) {
+    ensureGhToken();
+    const version = readPackageVersion();
+    if (!opts.skipNotes) {
+      await runGenerateReleaseNotes({
+        version,
+        out: PUBLISH_NOTES,
+        plain: true,
+        model: opts.model,
+      });
+    }
+    await publishNotesToGithub(version);
+    return;
+  }
+
   const currentVersion = readPackageVersion();
   const nextVersion = bumpPatchVersion(currentVersion);
 
@@ -182,7 +219,7 @@ async function main() {
   console.log(`Version: v${currentVersion} → v${nextVersion}\n`);
 
   if (!opts.skipNotes) {
-    console.log("Step 1/4 — Generate release notes (Ollama)…");
+    console.log("Step 1/5 — Generate release notes (Ollama)…");
     const result = await runGenerateReleaseNotes({
       version: nextVersion,
       out: PUBLISH_NOTES,
@@ -192,10 +229,13 @@ async function main() {
     console.log("\n--- Release notes preview ---\n");
     console.log(result.notes);
     console.log("\n--- end preview ---\n");
+
+    const archivePath = path.join(ROOT, "release-notes", `v${nextVersion}.md`);
+    fs.copyFileSync(PUBLISH_NOTES, archivePath);
   } else if (!fs.existsSync(PUBLISH_NOTES)) {
     throw new Error(`Missing ${path.relative(ROOT, PUBLISH_NOTES)}. Run without --skip-notes first.`);
   } else {
-    console.log("Step 1/4 — Skipping notes (--skip-notes), using publish.md");
+    console.log("Step 1/5 — Skipping notes (--skip-notes), using publish.md");
   }
 
   if (opts.dryRun) {
@@ -203,11 +243,11 @@ async function main() {
     return;
   }
 
-  console.log("Step 2/4 — Bump version…");
+  console.log("Step 2/5 — Bump version…");
   writePackageVersion(nextVersion);
   console.log(`package.json → ${nextVersion}`);
 
-  console.log("Step 3/4 — Commit & tag…");
+  console.log("Step 3/5 — Commit & tag…");
   try {
     gitCommitAndTag(nextVersion, opts);
   } catch (err) {
@@ -216,8 +256,11 @@ async function main() {
 
   ensureGhToken();
 
-  console.log("Step 4/4 — Build & publish to GitHub Releases…");
-  runShell("npx tsc && npx vite build && npx electron-builder --publish always");
+  console.log("Step 4/5 — Build & publish to GitHub Releases…");
+  runShell("npm run installer:assets && npx tsc && npx vite build && npx electron-builder --publish always");
+
+  console.log("Step 5/5 — Attach release notes on GitHub…");
+  await publishNotesToGithub(nextVersion);
 
   console.log("\nPushing git…");
   try {

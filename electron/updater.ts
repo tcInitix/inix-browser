@@ -1,13 +1,23 @@
-import { app } from "electron";
+import { app, BrowserWindow } from "electron";
 import { autoUpdater } from "electron-updater";
-import type { BrowserWindow } from "electron";
+import type { BrowserWindow as BrowserWindowType } from "electron";
 import {
   friendlyUpdateError,
   fetchGithubReleaseBody,
   normalizeReleaseNotes,
 } from "./updater-text";
 
-let getWindow: (() => BrowserWindow | null) | null = null;
+let getWindow: (() => BrowserWindowType | null) | null = null;
+let beforeInstallHook: (() => void) | null = null;
+let quittingForUpdate = false;
+
+export function isQuittingForUpdate(): boolean {
+  return quittingForUpdate;
+}
+
+export function setUpdateInstallHook(fn: () => void): void {
+  beforeInstallHook = fn;
+}
 
 const GITHUB_OWNER = "tcInitix";
 const GITHUB_REPO = "inix-browser";
@@ -41,13 +51,19 @@ async function resolveReleaseNotes(version: string, fromUpdater: unknown): Promi
   return fetchGithubReleaseBody(GITHUB_OWNER, GITHUB_REPO, version);
 }
 
-export function initAutoUpdater(windowGetter: () => BrowserWindow | null): void {
+export function initAutoUpdater(windowGetter: () => BrowserWindowType | null): void {
   getWindow = windowGetter;
 
   if (!app.isPackaged) return;
 
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = false;
+
+  // Emitted by Electron during quitAndInstall; not always in @types yet.
+  (app as NodeJS.EventEmitter).on("before-quit-for-update", () => {
+    quittingForUpdate = true;
+    beforeInstallHook?.();
+  });
 
   autoUpdater.on("update-available", (info) => {
     void (async () => {
@@ -119,5 +135,19 @@ export async function downloadUpdate(): Promise<{ ok: boolean; error?: string }>
 }
 
 export function installUpdate(): void {
-  autoUpdater.quitAndInstall();
+  quittingForUpdate = true;
+  beforeInstallHook?.();
+
+  app.removeAllListeners("window-all-closed");
+
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (win.isDestroyed()) continue;
+    win.removeAllListeners("close");
+    win.destroy();
+  }
+
+  // Let BrowserViews/renderer processes exit before NSIS checks for a running app.
+  setTimeout(() => {
+    autoUpdater.quitAndInstall(false, true);
+  }, 750);
 }

@@ -875,6 +875,23 @@ export class TabManager {
     this.lastActiveAt.delete(tabId);
     this.pendingScroll.delete(tabId);
     this.zoomLevels.delete(tabId);
+    this.panicPreloadTabs.delete(tabId);
+  }
+
+  /** Tear down all page views so the process can exit for NSIS update install. */
+  shutdownForUpdate(): void {
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (win.isDestroyed()) continue;
+      try {
+        win.setBrowserView(null);
+      } catch {
+        // ignore
+      }
+    }
+    for (const tabId of [...this.views.keys()]) {
+      this.destroyTab(tabId);
+    }
+    this.perWindow.clear();
   }
 
   private destroyView(tabId: string) {
