@@ -22,36 +22,75 @@ Var pid
     Pop $0
   FunctionEnd
 
+  ; Use APP_GUID / UNINSTALL_APP_KEY (command-line defines) — safe in Functions at parse time.
+  Function inixForceCloseApp
+    DetailPrint "Closing running ${PRODUCT_NAME}..."
+    !ifdef INSTALL_MODE_PER_ALL_USERS
+      nsExec::Exec `taskkill /im "${PRODUCT_FILENAME}.exe" /fi "PID ne $pid"`
+    !else
+      nsExec::Exec `"$SYSDIR\cmd.exe" /c taskkill /im "${PRODUCT_FILENAME}.exe" /fi "PID ne $pid" /fi "USERNAME eq %USERNAME%"`
+    !endif
+    Sleep 300
+    StrCpy $R1 0
+    inixForceCloseLoop:
+      IntOp $R1 $R1 + 1
+      !ifdef INSTALL_MODE_PER_ALL_USERS
+        ${nsProcess::FindProcess} "${PRODUCT_FILENAME}.exe" $R0
+      !else
+        nsExec::Exec `"$SYSDIR\cmd.exe" /c tasklist /FI "USERNAME eq %USERNAME%" /FI "IMAGENAME eq ${PRODUCT_FILENAME}.exe" /FO csv | "$SYSDIR\find.exe" "${PRODUCT_FILENAME}.exe"`
+        Pop $R0
+      !endif
+      IntCmp $R0 0 0 inixForceCloseDone
+        Sleep 1000
+        !ifdef INSTALL_MODE_PER_ALL_USERS
+          nsExec::Exec `taskkill /f /im "${PRODUCT_FILENAME}.exe" /fi "PID ne $pid"`
+        !else
+          nsExec::Exec `"$SYSDIR\cmd.exe" /c taskkill /f /im "${PRODUCT_FILENAME}.exe" /fi "PID ne $pid" /fi "USERNAME eq %USERNAME%"`
+        !endif
+        !ifdef INSTALL_MODE_PER_ALL_USERS
+          ${nsProcess::FindProcess} "${PRODUCT_FILENAME}.exe" $R0
+        !else
+          nsExec::Exec `"$SYSDIR\cmd.exe" /c tasklist /FI "USERNAME eq %USERNAME%" /FI "IMAGENAME eq ${PRODUCT_FILENAME}.exe" /FO csv | "$SYSDIR\find.exe" "${PRODUCT_FILENAME}.exe"`
+          Pop $R0
+        !endif
+        IntCmp $R0 0 0 inixForceCloseDone
+          DetailPrint "Waiting for ${PRODUCT_NAME} to close."
+          Sleep 2000
+          Goto inixForceCloseLoop
+      IntCmp $R1 5 inixForceCloseDone inixForceCloseLoop inixForceCloseDone
+    inixForceCloseDone:
+  FunctionEnd
+
   Function inixRetryUninstallInPlace
     Push $R1
     Push $R2
     Push $R3
     Push $R4
 
-    ReadRegStr $R1 SHELL_CONTEXT "${UNINSTALL_REGISTRY_KEY}" UninstallString
-    ${If} $R1 == ""
+    ReadRegStr $R1 SHELL_CONTEXT "Software\Microsoft\Windows\CurrentVersion\Uninstall\${UNINSTALL_APP_KEY}" UninstallString
+    StrCmp $R1 "" 0 inixRetryHaveUninstall
       Push "H1:retry-skip no-uninstall-string"
       Call inixWriteDebugLog
       Goto inixRetryUninstallDone
-    ${EndIf}
+    inixRetryHaveUninstall:
 
     Push $R1
     Call GetInQuotes
     Pop $R2
 
-    ReadRegStr $R3 SHELL_CONTEXT "${INSTALL_REGISTRY_KEY}" InstallLocation
-    ${If} $R3 == ""
+    ReadRegStr $R3 SHELL_CONTEXT "Software\${APP_GUID}" InstallLocation
+    StrCmp $R3 "" 0 inixRetryHaveInst
       Push $R2
       Call GetFileParent
       Pop $R3
-    ${EndIf}
+    inixRetryHaveInst:
 
     StrCpy $R4 "/S /KEEP_APP_DATA --updated"
-    ${if} $installMode == "CurrentUser"
-      StrCpy $R4 "$R4 /currentuser"
-    ${else}
+    !ifdef INSTALL_MODE_PER_ALL_USERS
       StrCpy $R4 "$R4 /allusers"
-    ${endif}
+    !else
+      StrCpy $R4 "$R4 /currentuser"
+    !endif
 
     Push "H1:retry-inplace path=$R2 inst=$R3"
     Call inixWriteDebugLog
@@ -60,21 +99,30 @@ Var pid
     Push "H1:retry-inplace-exit code=$R0"
     Call inixWriteDebugLog
 
-    ${If} $R0 != 0
+    IntCmp $R0 0 inixRetryUninstallDone 0 0
       DetailPrint "In-place uninstall failed ($R0). Closing ${PRODUCT_NAME} and clearing install folder..."
-      !insertmacro _CHECK_APP_RUNNING
+      Call inixForceCloseApp
       SetOutPath $TEMP
       RMDir /r "$R3"
       Push "H3:fallback-rmdir inst=$R3 after=$R0"
       Call inixWriteDebugLog
       StrCpy $R0 0
-    ${EndIf}
 
     inixRetryUninstallDone:
     Pop $R4
     Pop $R3
     Pop $R2
     Pop $R1
+  FunctionEnd
+
+  Function inixCustomUnInstallCheck
+    Push "H4:uninstall-old-version-exit code=$R0"
+    Call inixWriteDebugLog
+    IntCmp $R0 0 inixCustomUnInstallCheckDone
+    Call inixRetryUninstallInPlace
+    Push "H4:uninstall-after-retry code=$R0"
+    Call inixWriteDebugLog
+    inixCustomUnInstallCheckDone:
   FunctionEnd
   ; #endregion
 !endif
@@ -142,19 +190,11 @@ ShowUninstDetails show
   !macroend
 
   !macro customUnInstallCheck
-    Push "H4:uninstall-old-version-exit code=$R0"
-    Call inixWriteDebugLog
-    ${If} $R0 == 0
-      Goto inixUninstallCheckOk
-    ${EndIf}
-    Call inixRetryUninstallInPlace
-    Push "H4:uninstall-after-retry code=$R0"
-    Call inixWriteDebugLog
-    inixUninstallCheckOk:
+    Call inixCustomUnInstallCheck
   !macroend
 
   !macro customUnInstallCheckCurrentUser
-    !insertmacro customUnInstallCheck
+    Call inixCustomUnInstallCheck
   !macroend
 !endif
 
