@@ -8,6 +8,21 @@ function send(channel: string, payload?: unknown): void {
   getWindow?.()?.webContents.send(channel, payload);
 }
 
+/** Background update checks fail quietly when there is no release yet or the network is down. */
+function isSilentUpdateError(message: string): boolean {
+  const m = message.toLowerCase();
+  return (
+    m.includes("no published versions") ||
+    m.includes("404") ||
+    m.includes("net::") ||
+    m.includes("network") ||
+    m.includes("enotfound") ||
+    m.includes("econnrefused") ||
+    m.includes("latest.yml") ||
+    m.includes("unable to find latest version")
+  );
+}
+
 export function initAutoUpdater(windowGetter: () => BrowserWindow | null): void {
   getWindow = windowGetter;
 
@@ -41,13 +56,12 @@ export function initAutoUpdater(windowGetter: () => BrowserWindow | null): void 
   });
 
   autoUpdater.on("error", (err) => {
-    send("update:error", { message: err.message });
+    if (isSilentUpdateError(err.message)) return;
+    console.warn("[updater]", err.message);
   });
 
   setTimeout(() => {
-    void autoUpdater.checkForUpdates().catch(() => {
-      // offline or no releases yet
-    });
+    void autoUpdater.checkForUpdates().catch(() => {});
   }, 12_000);
 
   setInterval(() => {
@@ -65,13 +79,17 @@ export function isUpdateSupported(): boolean {
 
 export async function checkForUpdatesManual(): Promise<{ ok: boolean; error?: string }> {
   if (!app.isPackaged) {
-    return { ok: false, error: "Updates are only checked in installed builds" };
+    return { ok: false, error: "Updates are only checked in the installed app (.exe), not in dev mode." };
   }
   try {
     await autoUpdater.checkForUpdates();
     return { ok: true };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Update check failed" };
+    const message = err instanceof Error ? err.message : "Update check failed";
+    if (isSilentUpdateError(message)) {
+      return { ok: true };
+    }
+    return { ok: false, error: message };
   }
 }
 

@@ -1,14 +1,17 @@
 {
   "name": "inix-browser",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Inix — a fast, private browser",
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build && electron-builder",
     "build:inix": "vite build && electron-builder",
-    "release": "tsc && vite build && electron-builder --publish always",
-    "release:patch": "npm version patch && npm run release",
+    "release": "node scripts/release.mjs",
+    "release:local": "tsc && vite build && electron-builder",
+    "release:publish": "node scripts/release.mjs",
+    "release:notes": "node scripts/generate-release-notes.mjs",
+    "release:notes:ps1": "powershell -ExecutionPolicy Bypass -File scripts/release-notes.ps1",
     "preview": "vite preview",
     "postinstall": "node node_modules/electron/install.js",
     "setup": "powershell -ExecutionPolicy Bypass -File scripts/setup-inix.ps1"
@@ -17,7 +20,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/YOUR_GITHUB_USERNAME/inix-browser.git"
+    "url": "https://github.com/tcInitix/inix-browser.git"
   },
   "dependencies": {
     "@mozilla/readability": "^0.6.0",
@@ -49,11 +52,16 @@
     },
     "win": {
       "target": "nsis",
-      "icon": "public/icon.png"
+      "icon": "public/icon.png",
+      "signAndEditExecutable": false
+    },
+    "forceCodeSigning": false,
+    "releaseInfo": {
+      "releaseNotesFile": "release-notes/publish.md"
     },
     "publish": {
       "provider": "github",
-      "owner": "YOUR_GITHUB_USERNAME",
+      "owner": "tcInitix",
       "repo": "inix-browser"
     }
   }

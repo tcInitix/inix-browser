@@ -7,6 +7,7 @@ import {
   isModelInstalled,
 } from "../utils/ollama-models";
 import { VaultUnlockModal } from "./VaultUnlockModal";
+import { serializePanicUrls, normalizePanicUrls } from "../utils/panic";
 
 type AiProvider = "local" | "api";
 
@@ -121,6 +122,7 @@ export function SettingsPage({ onNavigate, onAliasesChanged, onBookmarkBarChange
   const [homepageUrl, setHomepageUrl] = useState("inix://newtab");
   const [newTabUseHomepage, setNewTabUseHomepage] = useState(false);
   const [privateModeShortcut, setPrivateModeShortcut] = useState<"window" | "tab">("window");
+  const [panicUrlsText, setPanicUrlsText] = useState("");
   const [sites, setSites] = useState<SiteRecord[]>([]);
   const [grants, setGrants] = useState<PermissionGrant[]>([]);
   const [aliases, setAliases] = useState<UrlAlias[]>([]);
@@ -175,6 +177,7 @@ export function SettingsPage({ onNavigate, onAliasesChanged, onBookmarkBarChange
       setHomepageUrl(s.homepage_url || "inix://newtab");
       setNewTabUseHomepage(s.new_tab_use_homepage);
       setPrivateModeShortcut(s.private_mode_shortcut);
+      setPanicUrlsText((s.panic_urls ?? []).join("\n"));
     });
     void window.inix?.aliases.list().then(setAliases);
     void window.inix?.vault.isConfigured().then(setVaultConfigured);
@@ -312,6 +315,16 @@ export function SettingsPage({ onNavigate, onAliasesChanged, onBookmarkBarChange
     await s.set("homepage_url", homepageUrl.trim() || "inix://newtab");
     await s.set("new_tab_use_homepage", newTabUseHomepage ? "true" : "false");
     await s.set("private_mode_shortcut", privateModeShortcut);
+    const panicUrls = panicUrlsText
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+    await s.set("panic_urls", serializePanicUrls(panicUrls));
+    await s.set("panic_configured", panicUrls.length > 0 ? "true" : "false");
+    const normalizedPanic = normalizePanicUrls(panicUrls);
+    if (normalizedPanic.length > 0) {
+      await window.inix?.browser.panicSync(normalizedPanic);
+    }
     await window.inix?.chrome.setBookmarkBar(bookmarkBarEnabled);
     onBookmarkBarChange?.(bookmarkBarEnabled);
     const map = await window.inix?.aliases.map();
@@ -739,6 +752,31 @@ export function SettingsPage({ onNavigate, onAliasesChanged, onBookmarkBarChange
               </label>
               <p className="settings-note">
                 Use <code>inix://newtab</code> for the default Inix start page, or any web address.
+              </p>
+
+              <div className="settings-divider" />
+
+              <div className="settings-card-head">
+                <div>
+                  <h2>Panic switch</h2>
+                  <p>
+                    Instantly swap to safe tabs, then swap back. Button in the title bar or Ctrl+Shift+P.
+                  </p>
+                </div>
+              </div>
+              <label className="settings-field settings-field-stack">
+                <span>Safe URLs (one per line, each opens in its own tab)</span>
+                <textarea
+                  className="panic-settings-textarea"
+                  rows={4}
+                  value={panicUrlsText}
+                  onChange={(e) => setPanicUrlsText(e.target.value)}
+                  placeholder={"google.com\nhttps://github.com"}
+                />
+              </label>
+              <p className="settings-note">
+                Your real tabs are preserved in memory until you switch back. Session restore keeps your real tabs,
+                not the safe ones.
               </p>
 
               <div className="settings-divider" />

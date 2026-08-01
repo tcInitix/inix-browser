@@ -86,6 +86,13 @@ export interface TabUpdate {
   securityDetail?: string;
 }
 
+export interface PanicPreloadTab {
+  tabId: string;
+  url: string;
+  title: string;
+  isLoading: boolean;
+}
+
 export interface DownloadRecord {
   id: string;
   url: string;
@@ -175,6 +182,9 @@ export interface InixAPI {
     toggleDevTools: (tabId: string) => Promise<void>;
     print: (tabId: string) => Promise<void>;
     getReaderContent: (tabId: string) => Promise<{ title: string; url: string; text: string } | null>;
+    panicSync: (urls: string[]) => Promise<PanicPreloadTab[]>;
+    panicActivate: () => Promise<void>;
+    panicDeactivate: (urls: string[]) => Promise<void>;
   };
   find: {
     start: (tabId: string, text: string, forward?: boolean) => Promise<number>;
@@ -191,6 +201,7 @@ export interface InixAPI {
   permission: {
     respond: (id: string, allow: boolean) => Promise<boolean>;
     onRequest: (callback: (req: PermissionRequest) => void) => () => void;
+    onDismiss: (callback: (payload: { id: string }) => void) => () => void;
     list: () => Promise<PermissionGrant[]>;
     revoke: (partition: string, origin: string, permission: string) => Promise<boolean>;
     revokeOrigin: (partition: string, origin: string) => Promise<number>;
@@ -315,6 +326,8 @@ export interface InixAPI {
       new_tab_use_homepage: boolean;
       private_mode_shortcut: "window" | "tab";
       bookmark_bar_enabled: boolean;
+      panic_configured: boolean;
+      panic_urls: string[];
     }>;
     rebuildIndex: () => Promise<boolean>;
   };

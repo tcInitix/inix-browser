@@ -34,6 +34,8 @@ export interface Settings {
   new_tab_use_homepage: boolean;
   private_mode_shortcut: "window" | "tab";
   bookmark_bar_enabled: boolean;
+  panic_configured: boolean;
+  panic_urls: string[];
 }
 
 export function getSettings(): Settings {
@@ -63,5 +65,16 @@ export function getSettings(): Settings {
     new_tab_use_homepage: getSetting("new_tab_use_homepage") === "true",
     private_mode_shortcut: getSetting("private_mode_shortcut") === "tab" ? "tab" : "window",
     bookmark_bar_enabled: getSetting("bookmark_bar_enabled") === "true",
+    panic_configured: getSetting("panic_configured") === "true",
+    panic_urls: (() => {
+      try {
+        const parsed = JSON.parse(getSetting("panic_urls") || "[]") as unknown;
+        return Array.isArray(parsed)
+          ? parsed.filter((item): item is string => typeof item === "string")
+          : [];
+      } catch {
+        return [];
+      }
+    })(),
   };
 }

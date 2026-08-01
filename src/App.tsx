@@ -16,7 +16,13 @@ import { PermissionPrompt } from "./components/PermissionPrompt";
 import { SavePasswordPrompt, type SavePasswordOffer } from "./components/SavePasswordPrompt";
 import { BookmarkBar } from "./components/BookmarkBar";
 import { UpdatePrompt, type UpdateState } from "./components/UpdatePrompt";
+import { OnboardingFlow, type OnboardingResult } from "./components/OnboardingFlow";
+import { PanicSetup } from "./components/PanicSetup";
 import type { PermissionRequest } from "./inix.d";
+import { parsePanicUrls, serializePanicUrls, normalizePanicUrls } from "./utils/panic";
+
+const PANIC_PRELOAD_PREFIX = "inix-panic-preload-";
+const isPanicPreloadId = (id: string) => id.startsWith(PANIC_PRELOAD_PREFIX);
 import {
   createTab,
   normalizeUrl,
@@ -31,6 +37,11 @@ import {
 } from "./types";
 
 const browser = () => window.inix?.browser;
+
+interface SavedSession {
+  tabs: Tab[];
+  activeTabId: string;
+}
 
 export default function App() {
   const [tabs, setTabs] = useState<Tab[]>([]);
@@ -52,8 +63,16 @@ export default function App() {
   const [bookmarkBarEnabled, setBookmarkBarEnabled] = useState(false);
   const [bookmarkBarRefresh, setBookmarkBarRefresh] = useState(0);
   const [updateState, setUpdateState] = useState<UpdateState>({ status: "idle" });
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
+  const [panicMode, setPanicMode] = useState(false);
+  const [panicSetupOpen, setPanicSetupOpen] = useState(false);
   const initialized = useRef(new Set<string>());
   const closedTabs = useRef<Tab[]>([]);
+  const realSessionRef = useRef<SavedSession | null>(null);
+  const tabsRef = useRef(tabs);
+  const activeTabIdRef = useRef(activeTabId);
+  tabsRef.current = tabs;
+  activeTabIdRef.current = activeTabId;
   const addressBarRef = useRef<AddressBarHandle>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const restored = useRef(false);
@@ -61,11 +80,12 @@ export default function App() {
   const activeTab = tabs.find((t) => t.id === activeTabId) ?? tabs[0];
 
   const browserViewSuppressed =
+    onboardingOpen ||
+    panicSetupOpen ||
     !!permissionRequest ||
     !!savePasswordOffer ||
     updateState.status === "available" ||
     updateState.status === "ready" ||
-    updateState.status === "error" ||
     downloadsOpen ||
     !!readerContent ||
     searchOpen ||
@@ -115,20 +135,26 @@ export default function App() {
 
   useEffect(() => {
     if (!sessionReady || tabs.length === 0) return;
-    const snapshot = buildSessionSnapshot(tabs, activeTabId);
+    const snapshot =
+      panicMode && realSessionRef.current
+        ? buildSessionSnapshot(realSessionRef.current.tabs, realSessionRef.current.activeTabId)
+        : buildSessionSnapshot(tabs, activeTabId);
     void window.inix?.session.sync(snapshot);
-  }, [tabs, activeTabId, sessionReady]);
+  }, [tabs, activeTabId, sessionReady, panicMode]);
 
   useEffect(() => {
     const onUnload = () => {
-      if (tabs.length > 0) {
-        void window.inix?.session.sync(buildSessionSnapshot(tabs, activeTabId));
-        void window.inix?.session.flush(true);
-      }
+      if (tabs.length === 0) return;
+      const snapshot =
+        panicMode && realSessionRef.current
+          ? buildSessionSnapshot(realSessionRef.current.tabs, realSessionRef.current.activeTabId)
+          : buildSessionSnapshot(tabs, activeTabId);
+      void window.inix?.session.sync(snapshot);
+      void window.inix?.session.flush(true);
     };
     window.addEventListener("beforeunload", onUnload);
     return () => window.removeEventListener("beforeunload", onUnload);
-  }, [tabs, activeTabId]);
+  }, [tabs, activeTabId, panicMode]);
 
   useEffect(() => {
     void window.inix?.aliases.map().then((map) => {
@@ -148,6 +174,35 @@ export default function App() {
   }, [activeTabId, updateTab]);
 
   useEffect(() => {
+    if (!sessionReady || privateWindow) return;
+    void window.inix?.settings.get().then((all) => {
+      if (all?.onboarding_completed !== "true") {
+        setOnboardingOpen(true);
+        void browser()?.hide();
+      }
+    });
+  }, [sessionReady, privateWindow]);
+
+  const completeOnboarding = useCallback(async (result: OnboardingResult) => {
+    const s = window.inix?.settings;
+    if (s) {
+      await s.set("history_mode", result.historyMode);
+      await s.set("bookmark_bar_enabled", result.bookmarkBar ? "true" : "false");
+      await s.set("homepage_url", result.homepageUrl);
+      await s.set("new_tab_use_homepage", result.newTabUseHomepage ? "true" : "false");
+      await s.set("onboarding_completed", "true");
+    }
+    if (result.vaultPassword) {
+      const vault = await window.inix?.vault.setup(result.vaultPassword);
+      if (!vault?.ok) showToast(vault?.error ?? "Vault setup failed");
+    }
+    setBookmarkBarEnabled(result.bookmarkBar);
+    await window.inix?.chrome.setBookmarkBar(result.bookmarkBar);
+    setOnboardingOpen(false);
+    showToast("Welcome to Inix");
+  }, []);
+
+  useEffect(() => {
     void window.inix?.settings.getFormatted().then((s) => {
       if (s?.bookmark_bar_enabled != null) {
         setBookmarkBarEnabled(s.bookmark_bar_enabled);
@@ -158,6 +213,22 @@ export default function App() {
   useEffect(() => {
     void window.inix?.chrome.setBookmarkBar(bookmarkBarEnabled);
   }, [bookmarkBarEnabled]);
+
+  const refreshPanicPreload = useCallback(async () => {
+    if (privateWindow || panicMode) return;
+    const b = browser();
+    if (!b?.panicSync) return;
+    const all = await window.inix?.settings.get();
+    const urls = normalizePanicUrls(parsePanicUrls(all?.panic_urls));
+    if (urls.length > 0) {
+      await b.panicSync(urls);
+    }
+  }, [privateWindow, panicMode]);
+
+  useEffect(() => {
+    if (!sessionReady || privateWindow) return;
+    void refreshPanicPreload();
+  }, [sessionReady, privateWindow, refreshPanicPreload]);
 
   useEffect(() => {
     window.inix?.sidebar.setOpen(sidebarOpen);
@@ -380,6 +451,141 @@ export default function App() {
     });
   }, [navigate]);
 
+  const enterPanic = useCallback(async (urls: string[]) => {
+    const b = browser();
+    if (!b?.panicSync || !b.panicActivate) return;
+
+    const currentTabs = tabsRef.current;
+    const currentActive = activeTabIdRef.current;
+
+    realSessionRef.current = {
+      tabs: currentTabs.map((t) => ({ ...t, children: [...(t.children ?? [])] })),
+      activeTabId: currentActive,
+    };
+
+    setSidebarOpen(false);
+    setSearchOpen(false);
+    setHistoryOpen(false);
+    setFindOpen(false);
+    setDownloadsOpen(false);
+    setReaderContent(null);
+    setLoadError(null);
+
+    for (const tab of currentTabs) {
+      if (isPanicPreloadId(tab.id)) continue;
+      b.destroyTab(tab.id);
+      initialized.current.delete(tab.id);
+    }
+
+    const panicUrls = normalizePanicUrls(urls);
+    const safeUrls = panicUrls.length > 0 ? panicUrls : [normalizeUrl("https://www.google.com")];
+
+    const preloaded = await b.panicSync(safeUrls);
+
+    const panicTabs: Tab[] = preloaded.map((p) => ({
+      id: p.tabId,
+      title: p.title,
+      url: p.url,
+      isLoading: p.isLoading,
+      canGoBack: false,
+      canGoForward: false,
+      navKey: Date.now(),
+    }));
+
+    for (const tab of panicTabs) {
+      initialized.current.add(tab.id);
+    }
+
+    setPanicMode(true);
+    setTabs(panicTabs);
+    setActiveTabId(panicTabs[0]!.id);
+
+    await b.panicActivate();
+  }, []);
+
+  const exitPanic = useCallback(async () => {
+    const saved = realSessionRef.current;
+    if (!saved) return;
+
+    const b = browser();
+    const currentTabs = tabsRef.current;
+
+    const all = await window.inix?.settings.get();
+    const configuredUrls = normalizePanicUrls(parsePanicUrls(all?.panic_urls));
+
+    for (const tab of currentTabs) {
+      initialized.current.delete(tab.id);
+    }
+
+    if (b?.panicDeactivate) {
+      await b.panicDeactivate(configuredUrls);
+    }
+
+    setPanicMode(false);
+    setTabs(saved.tabs);
+    setActiveTabId(saved.activeTabId);
+    realSessionRef.current = null;
+    setLoadError(null);
+
+    if (!b) return;
+
+    for (const tab of saved.tabs) {
+      if (tab.frozen) continue;
+      initialized.current.add(tab.id);
+    }
+
+    for (const tab of saved.tabs) {
+      if (tab.frozen) continue;
+      await b.createTab(tab.id, !!tab.private);
+      if (!isShellUrl(tab.url)) {
+        await b.navigate(tab.id, tab.url);
+      }
+    }
+
+    const active = saved.tabs.find((t) => t.id === saved.activeTabId);
+    if (active && !isShellUrl(active.url) && !active.frozen) {
+      await b.showTab(saved.activeTabId);
+    } else {
+      await b.hide();
+    }
+
+    void refreshPanicPreload();
+  }, [refreshPanicPreload]);
+
+  const togglePanic = useCallback(async () => {
+    if (privateWindow) {
+      showToast("Panic switch isn't available in private windows");
+      return;
+    }
+    if (panicMode) {
+      await exitPanic();
+      return;
+    }
+
+    const all = await window.inix?.settings.get();
+    const configured = all?.panic_configured === "true";
+    const urls = parsePanicUrls(all?.panic_urls);
+
+    if (!configured || urls.length === 0) {
+      setPanicSetupOpen(true);
+      browser()?.hide();
+      return;
+    }
+
+    await enterPanic(urls);
+  }, [privateWindow, panicMode, enterPanic, exitPanic]);
+
+  const savePanicSetup = useCallback(
+    async (urls: string[]) => {
+      const serialized = serializePanicUrls(urls);
+      await window.inix?.settings.set("panic_urls", serialized);
+      await window.inix?.settings.set("panic_configured", "true");
+      setPanicSetupOpen(false);
+      await enterPanic(urls);
+    },
+    [enterPanic]
+  );
+
   useEffect(() => {
     const unsub = window.inix?.shortcuts.onAction((action) => {
       switch (action) {
@@ -453,10 +659,13 @@ export default function App() {
         case "home":
           goHome();
           break;
+        case "panic":
+          void togglePanic();
+          break;
       }
     });
     return () => unsub?.();
-  }, [addTab, openLibrary, closeTab, activeTabId, tabs, navigate, reopenClosedTab, goHome]);
+  }, [addTab, openLibrary, closeTab, activeTabId, tabs, navigate, reopenClosedTab, goHome, togglePanic]);
 
   const openAiLink = useCallback(
     async (rawUrl: string) => {
@@ -512,8 +721,14 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const unsub = window.inix?.permission.onRequest((req) => setPermissionRequest(req));
-    return () => unsub?.();
+    const unsubRequest = window.inix?.permission.onRequest((req) => setPermissionRequest(req));
+    const unsubDismiss = window.inix?.permission.onDismiss(({ id }) => {
+      setPermissionRequest((prev) => (prev?.id === id ? null : prev));
+    });
+    return () => {
+      unsubRequest?.();
+      unsubDismiss?.();
+    };
   }, []);
 
   useEffect(() => {
@@ -533,9 +748,6 @@ export default function App() {
       ),
       window.inix?.update.onReady((info) =>
         setUpdateState({ status: "ready", version: info.version })
-      ),
-      window.inix?.update.onError((err) =>
-        setUpdateState({ status: "error", message: err.message })
       ),
     ];
     return () => unsubs.forEach((u) => u?.());
@@ -608,7 +820,12 @@ export default function App() {
 
   return (
     <div className={`inix-shell${sidebarOpen ? " sidebar-open" : ""}${immersive ? " immersive" : ""}${bookmarkBarEnabled ? " bookmark-bar-open" : ""}`}>
-      <TitleBar onOpenSettings={openSettings} onOpenLibrary={openLibrary} privateWindow={privateWindow} />
+      <TitleBar
+        onOpenSettings={openSettings}
+        onOpenLibrary={openLibrary}
+        onPanic={() => void togglePanic()}
+        privateWindow={privateWindow}
+      />
       <TabBar
         tabs={tabs}
         activeTabId={activeTabId}
@@ -738,6 +955,15 @@ export default function App() {
         }}
         onInstall={() => void window.inix?.update.install()}
       />
+
+      {onboardingOpen && <OnboardingFlow onComplete={(r) => void completeOnboarding(r)} />}
+
+      {panicSetupOpen && (
+        <PanicSetup
+          onCancel={() => setPanicSetupOpen(false)}
+          onSave={(urls) => savePanicSetup(urls)}
+        />
+      )}
 
       {toast && <div className="inix-toast">{toast}</div>}
 

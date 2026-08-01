@@ -119,6 +119,8 @@ function runMigrations(database: Database): void {
     new_tab_use_homepage: "false",
     private_mode_shortcut: "window",
     bookmark_bar_enabled: "false",
+    panic_configured: "false",
+    panic_urls: "[]",
   };
 
   for (const [key, value] of Object.entries(defaults)) {
@@ -130,6 +132,7 @@ function runMigrations(database: Database): void {
   migrateHistoryV2(database);
   migrateTier4(database);
   migrateBookmarkBar(database);
+  migrateOnboarding(database);
 }
 
 function settingExists(database: Database, key: string): boolean {
@@ -272,6 +275,22 @@ function migrateBookmarkBar(database: Database): void {
   if (!columnExists(database, "bookmarks", "on_bookmark_bar")) {
     database.run("ALTER TABLE bookmarks ADD COLUMN on_bookmark_bar INTEGER NOT NULL DEFAULT 0");
   }
+  saveDatabase();
+}
+
+function migrateOnboarding(database: Database): void {
+  if (settingExists(database, "onboarding_completed")) return;
+
+  const historyRows = database.exec("SELECT COUNT(*) AS cnt FROM history");
+  const bookmarkRows = database.exec("SELECT COUNT(*) AS cnt FROM bookmarks");
+  const historyCount = (historyRows[0]?.values[0]?.[0] as number) ?? 0;
+  const bookmarkCount = (bookmarkRows[0]?.values[0]?.[0] as number) ?? 0;
+  const completed = historyCount > 0 || bookmarkCount > 0 ? "true" : "false";
+
+  database.run("INSERT INTO settings (key, value) VALUES (?, ?)", [
+    "onboarding_completed",
+    completed,
+  ]);
   saveDatabase();
 }
 

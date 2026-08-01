@@ -18,7 +18,8 @@ export type ShortcutAction =
   | "reopen-tab"
   | "next-tab"
   | "prev-tab"
-  | "home";
+  | "home"
+  | "panic";
 
 export function matchShortcut(input: Input): ShortcutAction | null {
   if (input.type !== "keyDown") return null;
@@ -44,6 +45,7 @@ export function matchShortcut(input: Input): ShortcutAction | null {
 
   if (shift && key === "b") return "library";
   if (shift && key === "n") return "new-private-tab";
+  if (shift && key === "p") return "panic";
   if (shift && key === "t") return "reopen-tab";
   if (shift && key === "i") return "devtools";
   if (!shift && key === "n") return "new-tab";

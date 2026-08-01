@@ -117,6 +117,94 @@ export class TabManager {
 
   private onNewTab: NewTabHandler | null = null;
 
+  private static readonly PANIC_PRELOAD_PREFIX = "inix-panic-preload-";
+
+  private panicPreloadUrls: string[] = [];
+
+  private panicPreloadTabs = new Set<string>();
+
+  isPanicPreloadTab(tabId: string): boolean {
+    return tabId.startsWith(TabManager.PANIC_PRELOAD_PREFIX);
+  }
+
+  private panicPreloadTabId(index: number): string {
+    return `${TabManager.PANIC_PRELOAD_PREFIX}${index}`;
+  }
+
+  private titleFromUrl(url: string): string {
+    try {
+      return new URL(url).hostname.replace(/^www\./, "");
+    } catch {
+      return "New Tab";
+    }
+  }
+
+  private panicPreloadSnapshot(tabId: string, fallbackUrl: string) {
+    const wc = this.views.get(tabId)?.webContents;
+    const liveUrl = wc?.getURL();
+    const url =
+      liveUrl && liveUrl !== "about:blank" ? liveUrl : fallbackUrl;
+    return {
+      tabId,
+      url,
+      title: wc?.getTitle() || this.titleFromUrl(url),
+      isLoading: wc?.isLoading() ?? false,
+    };
+  }
+
+  async syncPanicPreload(
+    win: BrowserWindow,
+    urls: string[]
+  ): Promise<Array<{ tabId: string; url: string; title: string; isLoading: boolean }>> {
+    const prevCount = this.panicPreloadUrls.length;
+
+    for (let i = urls.length; i < prevCount; i++) {
+      const id = this.panicPreloadTabId(i);
+      if (this.views.has(id)) {
+        this.destroyTab(id);
+        this.panicPreloadTabs.delete(id);
+      }
+    }
+
+    const result: Array<{ tabId: string; url: string; title: string; isLoading: boolean }> = [];
+
+    for (let i = 0; i < urls.length; i++) {
+      const id = this.panicPreloadTabId(i);
+      const url = urls[i]!;
+      this.panicPreloadTabs.add(id);
+
+      const urlChanged = this.panicPreloadUrls[i] !== url;
+      if (!this.views.has(id)) {
+        this.createTab(win, id, false);
+        await this.loadInBackground(win, id, url);
+      } else if (urlChanged) {
+        await this.loadInBackground(win, id, url);
+      }
+
+      result.push(this.panicPreloadSnapshot(id, url));
+    }
+
+    this.panicPreloadUrls = [...urls];
+    return result;
+  }
+
+  activatePanicPreload(win: BrowserWindow): void {
+    const firstId = this.panicPreloadTabId(0);
+    if (this.views.has(firstId)) {
+      this.showTab(win, firstId);
+    }
+  }
+
+  async deactivatePanicPreload(win: BrowserWindow, urls: string[]): Promise<void> {
+    const state = this.pw(win);
+    if (state.activeTabId && this.isPanicPreloadTab(state.activeTabId)) {
+      this.hide(win);
+    }
+    if (urls.length > 0) {
+      await this.syncPanicPreload(win, urls);
+    }
+  }
+
 
 
   private pw(win: BrowserWindow): PerWindowState {
@@ -655,12 +743,12 @@ export class TabManager {
 
 
 
-      onPageLoaded(tabId);
+      if (!this.panicPreloadTabs.has(tabId)) {
+        onPageLoaded(tabId);
+      }
 
       if (!wc.getURL().startsWith("inix://")) {
-
         void wc.executeJavaScript(getAutofillBootstrapScript()).catch(() => {});
-
       }
 
     });
@@ -691,7 +779,9 @@ export class TabManager {
 
       });
 
-      recordLightVisit(tabId, url, wc.getTitle());
+      if (!this.panicPreloadTabs.has(tabId)) {
+        recordLightVisit(tabId, url, wc.getTitle());
+      }
 
     });
 
@@ -895,6 +985,41 @@ export class TabManager {
 
     state.activeTabId = null;
 
+  }
+
+
+
+  async loadInBackground(win: BrowserWindow, tabId: string, url: string, isPrivate = false): Promise<void> {
+    if (url === "inix://library" || url === "inix://settings") {
+      this.emit(tabId, { url, isLoading: false });
+      return;
+    }
+
+    const resolved = resolveInixUrl(url);
+    const loadUrl = resolved ?? url;
+    const priv = isPrivate || this.privateTabs.has(tabId);
+
+    if (this.frozenTabs.has(tabId)) {
+      await this.unfreezeTab(win, tabId, url, priv);
+      return;
+    }
+
+    if (!this.views.has(tabId)) this.createTab(win, tabId, priv);
+
+    if (url.startsWith("inix://") && !resolved) {
+      this.emit(tabId, { isLoading: false, error: "Inix Archive not available" });
+      return;
+    }
+
+    this.emit(tabId, { url, isLoading: true });
+    this.touchTab(tabId);
+
+    try {
+      await this.views.get(tabId)!.webContents.loadURL(loadUrl);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.emit(tabId, { isLoading: false, error: msg });
+    }
   }
 
 

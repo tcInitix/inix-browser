@@ -5,9 +5,11 @@ interface InixLogoProps {
 }
 
 export function InixLogo({ height = 24, className }: InixLogoProps) {
+  const logoSrc = `${import.meta.env.BASE_URL}logo.png`;
+
   return (
     <img
-      src="/logo.png"
+      src={logoSrc}
       alt="Inix"
       className={className}
       style={{ height, width: "auto" }}

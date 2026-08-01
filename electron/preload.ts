@@ -80,6 +80,12 @@ contextBridge.exposeInMainWorld("inix", {
     print: (tabId: string) => ipcRenderer.invoke("browser:print", tabId),
     getReaderContent: (tabId: string) =>
       ipcRenderer.invoke("browser:reader", tabId) as Promise<{ title: string; url: string; text: string } | null>,
+    panicSync: (urls: string[]) =>
+      ipcRenderer.invoke("panic:sync", urls) as Promise<
+        Array<{ tabId: string; url: string; title: string; isLoading: boolean }>
+      >,
+    panicActivate: () => ipcRenderer.invoke("panic:activate") as Promise<void>,
+    panicDeactivate: (urls: string[]) => ipcRenderer.invoke("panic:deactivate", urls) as Promise<void>,
   },
   find: {
     start: (tabId: string, text: string, forward?: boolean) =>
@@ -116,6 +122,11 @@ contextBridge.exposeInMainWorld("inix", {
       ) => callback(req);
       ipcRenderer.on("permission:request", handler);
       return () => ipcRenderer.removeListener("permission:request", handler);
+    },
+    onDismiss: (callback: (payload: { id: string }) => void) => {
+      const handler = (_e: IpcRendererEvent, payload: { id: string }) => callback(payload);
+      ipcRenderer.on("permission:dismiss", handler);
+      return () => ipcRenderer.removeListener("permission:dismiss", handler);
     },
     list: () => ipcRenderer.invoke("permission:list"),
     revoke: (partition: string, origin: string, permission: string) =>
