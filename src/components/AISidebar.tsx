@@ -2,7 +2,16 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChatMessage, EngineStatus } from "../inix.d";
 import { AiThinkingIndicator } from "./AiThinkingIndicator";
 import { AiMessageContent } from "./AiMessageContent";
+import { Switch } from "./Switch";
 import { shouldOfferLinksForTurn } from "../utils/extractLinks";
+
+const handledInjectIds = new Set<string>();
+
+export interface AiInjectRequest {
+  id: string;
+  tabId: string;
+  text?: string;
+}
 
 interface AISidebarProps {
   tabId: string;
@@ -10,6 +19,8 @@ interface AISidebarProps {
   hasPage: boolean;
   onClose: () => void;
   onOpenLink: (url: string) => void;
+  injectRequest?: AiInjectRequest | null;
+  onInjectConsumed?: () => void;
 }
 
 interface Message {
@@ -19,7 +30,15 @@ interface Message {
   streaming?: boolean;
 }
 
-export function AISidebar({ tabId, open, hasPage, onClose, onOpenLink }: AISidebarProps) {
+export function AISidebar({
+  tabId,
+  open,
+  hasPage,
+  onClose,
+  onOpenLink,
+  injectRequest,
+  onInjectConsumed,
+}: AISidebarProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [status, setStatus] = useState<EngineStatus | null>(null);
@@ -31,10 +50,19 @@ export function AISidebar({ tabId, open, hasPage, onClose, onOpenLink }: AISideb
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const wasOpenRef = useRef(false);
+  const [pageReadable, setPageReadable] = useState(hasPage);
 
   const focusInput = useCallback(() => {
     requestAnimationFrame(() => inputRef.current?.focus());
   }, []);
+
+  useEffect(() => {
+    if (!open) {
+      setPageReadable(hasPage);
+      return;
+    }
+    void window.inix?.browser.canUseTabContent(tabId).then(setPageReadable);
+  }, [open, tabId, hasPage]);
 
   const scrollChatToBottom = useCallback((behavior: ScrollBehavior = "auto") => {
     const el = listRef.current;
@@ -137,9 +165,13 @@ export function AISidebar({ tabId, open, hasPage, onClose, onOpenLink }: AISideb
   }, [open, messages, scrollChatToBottom]);
 
   const sendMessages = useCallback(
-    async (newMessages: Message[]) => {
+    async (
+      newMessages: Message[],
+      opts?: { usePageContext?: boolean; tabId?: string }
+    ) => {
       const ai = window.inix?.ai;
       if (!ai || loading) return;
+      const chatTabId = opts?.tabId ?? tabId;
       setLoading(true);
       streamRef.current = "";
       setMessages((prev) => [
@@ -156,7 +188,12 @@ export function AISidebar({ tabId, open, hasPage, onClose, onOpenLink }: AISideb
       ];
 
       try {
-        const result = await ai.chat(tabId, chatMsgs, false, useWebSearch);
+        const result = await ai.chat(
+          chatTabId,
+          chatMsgs,
+          opts?.usePageContext ?? false,
+          useWebSearch
+        );
         if (result && !result.ok) {
           failStreaming(result.error ?? "Chat failed");
         }
@@ -177,10 +214,12 @@ export function AISidebar({ tabId, open, hasPage, onClose, onOpenLink }: AISideb
 
   const runPageAction = async (
     userLabel: string,
-    action: () => Promise<{ ok: boolean; content?: string; error?: string } | undefined>
+    action: () => Promise<{ ok: boolean; content?: string; error?: string } | undefined>,
+    targetTabId = tabId
   ) => {
     if (loading) return;
-    if (!hasPage) {
+    const readable = await window.inix?.browser.canUseTabContent(targetTabId);
+    if (!readable) {
       failStreaming("Open a web page first — the new tab page has nothing to analyze.");
       return;
     }
@@ -202,6 +241,50 @@ export function AISidebar({ tabId, open, hasPage, onClose, onOpenLink }: AISideb
       failStreaming("AI request failed");
     }
   };
+
+  useEffect(() => {
+    if (!open || !injectRequest) return;
+    if (handledInjectIds.has(injectRequest.id)) return;
+    handledInjectIds.add(injectRequest.id);
+    if (handledInjectIds.size > 32) {
+      const oldest = handledInjectIds.values().next().value;
+      if (oldest) handledInjectIds.delete(oldest);
+    }
+
+    const targetTabId = injectRequest.tabId;
+
+    const run = async () => {
+      try {
+        if (!injectRequest.text) {
+          await runPageAction(
+            "Summarize this page",
+            () => window.inix!.ai.summarize(targetTabId),
+            targetTabId
+          );
+        } else if (injectRequest.text.startsWith("Tell me about this link:")) {
+          await sendMessages(
+            [{ id: crypto.randomUUID(), role: "user", content: injectRequest.text }],
+            { usePageContext: true, tabId: targetTabId }
+          );
+        } else {
+          await sendMessages(
+            [
+              {
+                id: crypto.randomUUID(),
+                role: "user",
+                content: `Please help me with this from the page:\n\n"${injectRequest.text}"`,
+              },
+            ],
+            { usePageContext: true, tabId: targetTabId }
+          );
+        }
+      } finally {
+        onInjectConsumed?.();
+      }
+    };
+
+    void run();
+  }, [injectRequest, open, onInjectConsumed, runPageAction, sendMessages]);
 
   if (!open) return null;
 
@@ -241,7 +324,7 @@ export function AISidebar({ tabId, open, hasPage, onClose, onOpenLink }: AISideb
         </div>
       )}
 
-      {!hasPage && (
+      {!pageReadable && (
         <div className="ai-offline-banner">
           Navigate to a website to summarize or explain page content. You can still chat here.
         </div>
@@ -250,7 +333,7 @@ export function AISidebar({ tabId, open, hasPage, onClose, onOpenLink }: AISideb
       <div className="ai-actions">
         <button
           onClick={() => runPageAction("Summarize this page", () => window.inix!.ai.summarize(tabId))}
-          disabled={loading || !status?.connected || !hasPage}
+          disabled={loading || !status?.connected || !pageReadable}
         >
           Summarize page
         </button>
@@ -258,20 +341,18 @@ export function AISidebar({ tabId, open, hasPage, onClose, onOpenLink }: AISideb
           onClick={() =>
             runPageAction("Explain selected text", () => window.inix!.ai.explainSelection(tabId))
           }
-          disabled={loading || !status?.connected || !hasPage}
+          disabled={loading || !status?.connected || !pageReadable}
         >
           Explain selection
         </button>
       </div>
 
-      <label className="ai-context-toggle">
-        <input
-          type="checkbox"
-          checked={useWebSearch}
-          onChange={(e) => setUseWebSearch(e.target.checked)}
-        />
-        Search the web for factual questions
-      </label>
+      <Switch
+        className="ai-context-toggle"
+        checked={useWebSearch}
+        onChange={setUseWebSearch}
+        label="Search the web for factual questions"
+      />
       <p className="ai-context-hint">Leave off for casual chat. When on, search only runs for questions and lookups — not greetings.</p>
 
       {webSearchStatus && (
@@ -283,7 +364,7 @@ export function AISidebar({ tabId, open, hasPage, onClose, onOpenLink }: AISideb
       <div className="ai-messages" ref={listRef}>
         {messages.length === 0 && (
           <p className="ai-empty">
-            {hasPage
+            {pageReadable
               ? "Ask about this page, search the web, or just chat — processing stays local except web fetches."
               : "Ask anything — turn on web search when you need live facts."}
           </p>
@@ -338,7 +419,7 @@ export function AISidebar({ tabId, open, hasPage, onClose, onOpenLink }: AISideb
               handleSend();
             }
           }}
-          placeholder={hasPage ? "Ask about this page…" : "Ask anything…"}
+          placeholder={pageReadable ? "Ask about this page…" : "Ask anything…"}
           rows={2}
           disabled={!status?.connected}
         />

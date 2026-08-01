@@ -7,6 +7,7 @@ import { tabManager, setupBrowsingSession } from "./tab-manager";
 import { matchShortcut } from "./shortcuts";
 import { initDatabase } from "./storage/db";
 import { registerAiHandlers } from "./ai/handlers";
+import { canUseTabContent } from "./ai/context";
 import { registerStorageHandlers, initStorageDefaults } from "./storage/handlers";
 import { registerSessionHandlers } from "./session/handlers";
 import { sessionManager } from "./session/session-manager";
@@ -23,6 +24,7 @@ import { initPermissionHandler } from "./permissions";
 import { initContextMenus } from "./context-menu";
 import { registerBrowserHandlers } from "./browser-handlers";
 import { registerAutofillHandlers } from "./autofill/handlers";
+import { registerImportHandlers } from "./import/handlers";
 import { getSettings } from "./storage/settings";
 import {
   DEFAULT_PROFILE_ID,
@@ -209,6 +211,8 @@ function registerMainIpcHandlers() {
     const win = winFromEvent(e);
     if (win) return tabManager.ensureActive(win, tabId, url, isPrivate ?? false);
   });
+  ipcMain.handle("tab:get-url", (_e, tabId: string) => tabManager.getTabUrl(tabId));
+  ipcMain.handle("tab:can-use-content", (_e, tabId: string) => canUseTabContent(tabId));
   ipcMain.handle("sidebar:set-open", (e, open: boolean) => {
     const win = winFromEvent(e);
     if (win) tabManager.setSidebarOpen(win, open);
@@ -252,6 +256,7 @@ async function bootstrap() {
     setupBrowsingSession();
     initStorageDefaults();
     registerStorageHandlers();
+    registerImportHandlers();
     registerSessionHandlers();
     registerAiHandlers(() => mainWindow);
     registerBrowserHandlers(() => mainWindow);

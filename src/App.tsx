@@ -5,7 +5,7 @@ import { TabBar } from "./components/TabBar";
 import { NavBar, type AddressBarHandle } from "./components/NavBar";
 import { NewTabPage } from "./components/NewTabPage";
 import { LibraryPanel } from "./components/LibraryPanel";
-import { AISidebar } from "./components/AISidebar";
+import { AISidebar, type AiInjectRequest } from "./components/AISidebar";
 import { SemanticSearch } from "./components/SemanticSearch";
 import { HistoryPanel } from "./components/HistoryPanel";
 import { SettingsPage } from "./components/SettingsPage";
@@ -49,6 +49,7 @@ export default function App() {
   const [sessionReady, setSessionReady] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [aiInject, setAiInject] = useState<AiInjectRequest | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [bookmarked, setBookmarked] = useState(false);
@@ -760,10 +761,18 @@ export default function App() {
         setActiveTabId(child.id);
       } else if (action.type === "search-text" && action.text) {
         navigate(action.text);
+      } else if (action.type === "send-to-ai") {
+        const tabId = action.tabId ?? activeTabId;
+        setSidebarOpen(true);
+        setAiInject({
+          id: crypto.randomUUID(),
+          tabId,
+          text: action.text,
+        });
       }
     });
     return () => unsub?.();
-  }, [navigate]);
+  }, [navigate, activeTabId]);
 
   useEffect(() => {
     const unsub = window.inix?.downloads.onUpdated(() => {
@@ -871,11 +880,13 @@ export default function App() {
       <div className="main-row">
         <main className="content-area">{renderContent()}</main>
         <AISidebar
-          tabId={activeTabId}
+          tabId={aiInject?.tabId ?? activeTabId}
           open={sidebarOpen}
           hasPage={!isShellUrl(activeTab.url)}
           onClose={() => setSidebarOpen(false)}
           onOpenLink={openAiLink}
+          injectRequest={aiInject}
+          onInjectConsumed={() => setAiInject(null)}
         />
       </div>
       <footer className="status-bar">

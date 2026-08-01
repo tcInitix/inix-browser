@@ -61,6 +61,9 @@ contextBridge.exposeInMainWorld("inix", {
     freezeTab: (tabId: string) => ipcRenderer.invoke("tab:freeze", tabId),
     ensureActive: (tabId: string, url: string, isPrivate?: boolean) =>
       ipcRenderer.invoke("tab:ensure-active", tabId, url, isPrivate),
+    getTabUrl: (tabId: string) => ipcRenderer.invoke("tab:get-url", tabId) as Promise<string>,
+    canUseTabContent: (tabId: string) =>
+      ipcRenderer.invoke("tab:can-use-content", tabId) as Promise<boolean>,
     onUpdated: (callback: (update: TabUpdate) => void) => {
       const handler = (_e: IpcRendererEvent, update: TabUpdate) => callback(update);
       ipcRenderer.on("tab:updated", handler);
@@ -144,10 +147,24 @@ contextBridge.exposeInMainWorld("inix", {
   },
   context: {
     onAction: (
-      callback: (action: { type: string; url?: string; text?: string; parentTabId?: string }) => void
+      callback: (action: {
+        type: string;
+        url?: string;
+        text?: string;
+        tabId?: string;
+        parentTabId?: string;
+      }) => void
     ) => {
-      const handler = (_e: IpcRendererEvent, action: { type: string; url?: string; text?: string; parentTabId?: string }) =>
-        callback(action);
+      const handler = (
+        _e: IpcRendererEvent,
+        action: {
+          type: string;
+          url?: string;
+          text?: string;
+          tabId?: string;
+          parentTabId?: string;
+        }
+      ) => callback(action);
       ipcRenderer.on("context:action", handler);
       return () => ipcRenderer.removeListener("context:action", handler);
     },
@@ -351,5 +368,14 @@ contextBridge.exposeInMainWorld("inix", {
     rename: (id: string, name: string) => ipcRenderer.invoke("profiles:rename", id, name),
     delete: (id: string) => ipcRenderer.invoke("profiles:delete", id),
     openWindow: (id: string) => ipcRenderer.invoke("profiles:open-window", id),
+  },
+  import: {
+    chromeProfiles: () => ipcRenderer.invoke("import:chrome-profiles"),
+    chromeBookmarks: (profileDir?: string) =>
+      ipcRenderer.invoke("import:chrome-bookmarks", profileDir),
+    pickChromeBookmarks: () => ipcRenderer.invoke("import:pick-chrome-bookmarks"),
+    chromePasswords: (profileDir?: string) =>
+      ipcRenderer.invoke("import:chrome-passwords", profileDir),
+    pickChromePasswordsCsv: () => ipcRenderer.invoke("import:pick-chrome-passwords-csv"),
   },
 });

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Bookmark, Workspace, WorkspaceCanvas } from "../inix.d";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 import { TagFilterBar } from "./TagFilterBar";
@@ -6,6 +6,30 @@ import { WorkspaceCanvasView } from "./WorkspaceCanvas";
 
 interface LibraryPanelProps {
   onNavigate: (url: string) => void;
+}
+
+function filterPins(
+  pins: WorkspaceCanvas["pins"],
+  query: string,
+  activeTags: string[]
+): WorkspaceCanvas["pins"] {
+  let result = pins;
+  if (activeTags.length) {
+    result = result.filter((pin) => {
+      const tags = pin.tags ? pin.tags.split(",").map((t) => t.trim().toLowerCase()) : [];
+      return activeTags.every((t) => tags.includes(t.toLowerCase()));
+    });
+  }
+  const q = query.trim().toLowerCase();
+  if (q) {
+    result = result.filter(
+      (pin) =>
+        pin.title?.toLowerCase().includes(q) ||
+        pin.url?.toLowerCase().includes(q) ||
+        pin.description?.toLowerCase().includes(q)
+    );
+  }
+  return result;
 }
 
 export function LibraryPanel({ onNavigate }: LibraryPanelProps) {
@@ -23,7 +47,7 @@ export function LibraryPanel({ onNavigate }: LibraryPanelProps) {
     const cache: Record<number, string | null> = {};
     for (const pin of pins) {
       if (pin.favicon_path) {
-        cache[pin.id] = await window.inix?.bookmarks.favicon(pin.favicon_path) ?? null;
+        cache[pin.id] = (await window.inix?.bookmarks.favicon(pin.favicon_path)) ?? null;
       }
     }
     setFaviconCache((prev) => ({ ...prev, ...cache }));
@@ -61,11 +85,22 @@ export function LibraryPanel({ onNavigate }: LibraryPanelProps) {
   }, [activeWsId, loadCanvas]);
 
   useEffect(() => {
-    if (!listView) return;
     void window.inix?.bookmarks
       .list({ tags: activeTags.length ? activeTags : undefined, query: query || undefined })
       .then(setListItems);
-  }, [listView, activeTags, query]);
+  }, [activeTags, query, canvas]);
+
+  const filteredCanvas = useMemo(() => {
+    if (!canvas) return null;
+    return {
+      ...canvas,
+      pins: filterPins(canvas.pins, query, activeTags),
+    };
+  }, [canvas, query, activeTags]);
+
+  const totalBookmarks = canvas?.pins.length ?? 0;
+  const visibleCount = listView ? listItems.length : filteredCanvas?.pins.length ?? 0;
+  const hasFilters = query.trim().length > 0 || activeTags.length > 0;
 
   const handleOpenArchive = async (id: number) => {
     const url = await window.inix?.bookmarks.openArchive(id);
@@ -93,74 +128,140 @@ export function LibraryPanel({ onNavigate }: LibraryPanelProps) {
     }
   };
 
+  const emptyCanvasHint =
+    totalBookmarks === 0
+      ? "Bookmark a page from the toolbar, or import from Chrome in Settings → Library."
+      : hasFilters
+        ? "No bookmarks match your search or tags. Try clearing filters."
+        : undefined;
+
   return (
-    <div className="library-panel">
-      <header className="library-header">
-        <div>
-          <h1>
-            <span className="logo-icon">◆</span> Inix Library
-          </h1>
-          <p className="library-subtitle">Your local knowledge base — bookmarks, archives, and workspaces</p>
-        </div>
-        <div className="library-header-actions">
-          <input
-            className="library-search"
-            placeholder="Search bookmarks…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-          <button
-            type="button"
-            className={`library-view-toggle${listView ? " active" : ""}`}
-            onClick={() => setListView((v) => !v)}
-          >
-            {listView ? "Canvas" : "List"}
-          </button>
-        </div>
-      </header>
-
-      <WorkspaceSwitcher
-        workspaces={workspaces}
-        activeId={activeWsId}
-        onSelect={setActiveWsId}
-        onCreate={handleCreateWorkspace}
-      />
-
-      <TagFilterBar tags={allTags} active={activeTags} onChange={setActiveTags} />
-
-      {listView ? (
-        <ul className="library-list">
-          {listItems.map((b) => (
-            <li key={b.id} className="library-list-item">
-              <button type="button" className="library-list-open" onClick={() => onNavigate(b.url)}>
-                <strong>{b.title || b.url}</strong>
-                <span>{b.url}</span>
-                {b.tags && (
-                  <span className="library-list-tags">
-                    {b.tags.split(",").filter(Boolean).map((t) => `#${t}`).join(" ")}
-                  </span>
-                )}
+    <div className="library-panel inix-page">
+      <div className="library-shell">
+        <header className="library-header">
+          <div className="library-header-main">
+            <button
+              type="button"
+              className="library-back"
+              onClick={() => onNavigate("inix://newtab")}
+            >
+              ← New tab
+            </button>
+            <div>
+              <h1>Inix Library</h1>
+              <p className="library-subtitle">
+                Bookmarks, archives, and workspaces — stored locally on your device
+              </p>
+            </div>
+          </div>
+          <div className="library-header-actions">
+            <div className="library-search-wrap">
+              <span className="library-search-icon" aria-hidden="true">
+                ⌕
+              </span>
+              <input
+                className="library-search"
+                placeholder="Search bookmarks…"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+            </div>
+            <div className="library-view-toggle-group">
+              <button
+                type="button"
+                className={`library-view-toggle${!listView ? " active" : ""}`}
+                onClick={() => setListView(false)}
+              >
+                Canvas
               </button>
-              {b.snapshot_path && (
-                <button type="button" onClick={() => void handleOpenArchive(b.id)}>
-                  Archive
-                </button>
+              <button
+                type="button"
+                className={`library-view-toggle${listView ? " active" : ""}`}
+                onClick={() => setListView(true)}
+              >
+                List
+              </button>
+            </div>
+          </div>
+        </header>
+
+        <div className="library-toolbar">
+          <WorkspaceSwitcher
+            workspaces={workspaces}
+            activeId={activeWsId}
+            onSelect={setActiveWsId}
+            onCreate={handleCreateWorkspace}
+          />
+          <p className="library-stats">
+            {hasFilters ? (
+              <>
+                <strong>{visibleCount}</strong> shown · {totalBookmarks} in workspace
+              </>
+            ) : (
+              <>
+                <strong>{totalBookmarks}</strong> bookmark{totalBookmarks === 1 ? "" : "s"}
+              </>
+            )}
+          </p>
+        </div>
+
+        <TagFilterBar tags={allTags} active={activeTags} onChange={setActiveTags} />
+
+        <div className="library-body">
+          {listView ? (
+            <ul className="library-list">
+              {listItems.map((b) => (
+                <li key={b.id} className="library-list-item inix-card">
+                  <button type="button" className="library-list-open" onClick={() => onNavigate(b.url)}>
+                    <strong>{b.title || b.url}</strong>
+                    <span>{b.url}</span>
+                    {b.tags && (
+                      <span className="library-list-tags">
+                        {b.tags
+                          .split(",")
+                          .filter(Boolean)
+                          .map((t) => `#${t}`)
+                          .join(" ")}
+                      </span>
+                    )}
+                  </button>
+                  <div className="library-list-actions">
+                    {b.snapshot_path && (
+                      <button type="button" className="library-list-archive" onClick={() => void handleOpenArchive(b.id)}>
+                        Archive
+                      </button>
+                    )}
+                  </div>
+                </li>
+              ))}
+              {listItems.length === 0 && (
+                <li className="library-empty-state">
+                  <span className="library-empty-icon" aria-hidden="true">
+                    ★
+                  </span>
+                  <h2>{hasFilters ? "No matches" : "No bookmarks yet"}</h2>
+                  <p>
+                    {hasFilters
+                      ? "Try a different search or clear tag filters."
+                      : "Star a page from the toolbar, or import from Chrome in Settings → Library."}
+                  </p>
+                </li>
               )}
-            </li>
-          ))}
-          {listItems.length === 0 && <li className="library-empty">No bookmarks yet — star a page to save it.</li>}
-        </ul>
-      ) : (
-        <WorkspaceCanvasView
-          canvas={canvas}
-          faviconCache={faviconCache}
-          onOpen={onNavigate}
-          onOpenArchive={(id) => void handleOpenArchive(id)}
-          onRemovePin={(id) => void handleRemovePin(id)}
-          onPinMove={handlePinMove}
-          onViewportChange={handleViewportChange}
-        />
-      )}
+            </ul>
+          ) : (
+            <WorkspaceCanvasView
+              canvas={filteredCanvas}
+              faviconCache={faviconCache}
+              onOpen={onNavigate}
+              onOpenArchive={(id) => void handleOpenArchive(id)}
+              onRemovePin={(id) => void handleRemovePin(id)}
+              onPinMove={handlePinMove}
+              onViewportChange={handleViewportChange}
+              emptyHint={emptyCanvasHint}
+            />
+          )}
+        </div>
+      </div>
     </div>
   );
 }

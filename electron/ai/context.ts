@@ -25,7 +25,6 @@ async function ensureTabReady(tabId: string): Promise<void> {
 
 async function runInPage<T>(tabId: string, script: string): Promise<T | null> {
   await ensureTabReady(tabId);
-  if (!tabManager.isViewActive(tabId)) return null;
   const wc = tabManager.getWebContents(tabId);
   if (!wc || wc.isDestroyed() || wc.isLoading()) return null;
 
@@ -73,6 +72,5 @@ export function buildContextPrompt(context: PageContext): string {
 
 export function canUseTabContent(tabId: string): boolean {
   if (tabManager.isFrozen(tabId)) return true;
-  if (!tabManager.isViewActive(tabId)) return false;
   return isBrowsableUrl(tabManager.getTabUrl(tabId));
 }

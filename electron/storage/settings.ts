@@ -36,6 +36,42 @@ export interface Settings {
   bookmark_bar_enabled: boolean;
   panic_configured: boolean;
   panic_urls: string[];
+  new_tab_quick_links: QuickLinkSetting[];
+}
+
+export interface QuickLinkSetting {
+  label: string;
+  url: string;
+  icon?: "letter";
+}
+
+function parseQuickLinksSetting(raw: string): QuickLinkSetting[] {
+  const fallback = [
+    { label: "DuckDuckGo", url: "https://duckduckgo.com" },
+    { label: "GitHub", url: "https://github.com" },
+    { label: "Reddit", url: "https://reddit.com" },
+    { label: "Hacker News", url: "https://news.ycombinator.com" },
+  ];
+  if (!raw.trim()) return fallback;
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return fallback;
+    const links = parsed
+      .map((item) => {
+        if (!item || typeof item !== "object") return null;
+        const row = item as Record<string, unknown>;
+        const label = typeof row.label === "string" ? row.label.trim() : "";
+        const url = typeof row.url === "string" ? row.url.trim() : "";
+        if (!label || !url) return null;
+        const link: QuickLinkSetting = { label, url };
+        if (row.icon === "letter") link.icon = "letter";
+        return link;
+      })
+      .filter((item): item is QuickLinkSetting => item != null);
+    return links.length ? links : fallback;
+  } catch {
+    return fallback;
+  }
 }
 
 export function getSettings(): Settings {
@@ -76,5 +112,6 @@ export function getSettings(): Settings {
         return [];
       }
     })(),
+    new_tab_quick_links: parseQuickLinksSetting(getSetting("new_tab_quick_links")),
   };
 }

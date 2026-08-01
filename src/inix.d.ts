@@ -173,6 +173,8 @@ export interface InixAPI {
     reload: (tabId: string) => Promise<void>;
     freezeTab: (tabId: string) => Promise<boolean>;
     ensureActive: (tabId: string, url: string, isPrivate?: boolean) => Promise<void>;
+    getTabUrl: (tabId: string) => Promise<string>;
+    canUseTabContent: (tabId: string) => Promise<boolean>;
     onUpdated: (callback: (update: TabUpdate) => void) => () => void;
     onOpenChild: (callback: (payload: { parentTabId: string; url: string }) => void) => () => void;
     zoomIn: (tabId: string) => Promise<number>;
@@ -213,7 +215,15 @@ export interface InixAPI {
     clearOrigin: (origin: string, opts?: { cookies?: boolean; storage?: boolean; partition?: string }) => Promise<void>;
   };
   context: {
-    onAction: (callback: (action: { type: string; url?: string; text?: string; parentTabId?: string }) => void) => () => void;
+    onAction: (
+      callback: (action: {
+        type: string;
+        url?: string;
+        text?: string;
+        tabId?: string;
+        parentTabId?: string;
+      }) => void
+    ) => () => void;
   };
   session: {
     getRestore: () => Promise<SessionSnapshot | null>;
@@ -328,6 +338,7 @@ export interface InixAPI {
       bookmark_bar_enabled: boolean;
       panic_configured: boolean;
       panic_urls: string[];
+      new_tab_quick_links: Array<{ label: string; url: string }>;
     }>;
     rebuildIndex: () => Promise<boolean>;
   };
@@ -372,6 +383,26 @@ export interface InixAPI {
     delete: (id: string) => Promise<boolean>;
     openWindow: (id: string) => Promise<boolean>;
   };
+  import: {
+    chromeProfiles: () => Promise<{
+      userDataDir: string | null;
+      profiles: Array<{ id: string; name: string; dir: string }>;
+    }>;
+    chromeBookmarks: (profileDir?: string) => Promise<ImportResult>;
+    pickChromeBookmarks: () => Promise<ImportResult>;
+    chromePasswords: (profileDir?: string) => Promise<ImportResult>;
+    pickChromePasswordsCsv: () => Promise<ImportResult>;
+  };
+}
+
+export interface ImportResult {
+  ok: boolean;
+  canceled?: boolean;
+  error?: string;
+  imported?: number;
+  updated?: number;
+  skipped?: number;
+  failed?: number;
 }
 
 declare global {

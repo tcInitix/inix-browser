@@ -91,6 +91,48 @@ export function getBookmarkByUrl(url: string): Bookmark | null {
   return b;
 }
 
+export interface ImportBookmarkItem {
+  url: string;
+  title: string;
+  onBar?: boolean;
+}
+
+export interface ImportBookmarksResult {
+  imported: number;
+  updated: number;
+  skipped: number;
+}
+
+export function importBookmarks(items: ImportBookmarkItem[]): ImportBookmarksResult {
+  let imported = 0;
+  let updated = 0;
+  let skipped = 0;
+  const wsId = getDefaultWorkspaceId();
+
+  for (const item of items) {
+    const url = item.url?.trim();
+    if (!url || (!url.startsWith("http://") && !url.startsWith("https://"))) {
+      skipped++;
+      continue;
+    }
+
+    const title = item.title?.trim() || url;
+    const existing = getBookmarkByUrl(url);
+    if (existing) {
+      if (item.onBar) setBookmarkOnBar(existing.id, true);
+      updated++;
+      continue;
+    }
+
+    const bookmark = addBookmark(url, title);
+    if (item.onBar) setBookmarkOnBar(bookmark.id, true);
+    pinBookmarkAtCenter(wsId, bookmark.id);
+    imported++;
+  }
+
+  return { imported, updated, skipped };
+}
+
 export function addBookmark(url: string, title: string, contentId: number | null = null): Bookmark {
   const now = Date.now();
   runExec(

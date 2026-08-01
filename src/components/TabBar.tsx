@@ -91,10 +91,10 @@ export function TabBar({
             )}
           </div>
         ))}
+        <button className="tab-new" onClick={onNewTab} aria-label="New tab">
+          +
+        </button>
       </div>
-      <button className="tab-new" onClick={onNewTab} aria-label="New tab">
-        +
-      </button>
 
       {contextMenu && (
         <>

@@ -10,6 +10,7 @@ type ContextAction =
   | { type: "copy-image"; srcURL: string }
   | { type: "save-image"; srcURL: string }
   | { type: "search-text"; text: string }
+  | { type: "send-to-ai"; tabId: string; text?: string }
   | { type: "inspect" };
 
 let getWindow: (() => BrowserWindow | null) | null = null;
@@ -90,6 +91,25 @@ export function showContextMenu(tabId: string, params: ContextMenuParams) {
       { type: "separator" }
     );
   }
+
+  template.push(
+    {
+      label: "Send to Inix AI",
+      click: () => {
+        const text = params.selectionText?.trim()
+          ? params.selectionText.trim()
+          : params.linkURL
+            ? `Tell me about this link: ${params.linkURL}`
+            : undefined;
+        getWindow?.()?.webContents.send("context:action", {
+          type: "send-to-ai",
+          tabId,
+          text,
+        } satisfies ContextAction);
+      },
+    },
+    { type: "separator" }
+  );
 
   if (params.isEditable) {
     template.push(

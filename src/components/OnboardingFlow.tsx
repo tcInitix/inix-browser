@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { InixLogo } from "./InixLogo";
+import { Switch } from "./Switch";
 
 export interface OnboardingResult {
   historyMode: "standard" | "transient";
@@ -142,14 +143,12 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
           <div className="onboarding-step">
             <h2>Make it yours</h2>
             <p className="onboarding-lead">Optional tweaks — all changeable later in Settings.</p>
-            <label className="onboarding-toggle">
-              <input
-                type="checkbox"
-                checked={bookmarkBar}
-                onChange={(e) => setBookmarkBar(e.target.checked)}
-              />
-              <span>Show classic bookmarks bar (Chrome / Firefox style)</span>
-            </label>
+            <Switch
+              className="onboarding-toggle"
+              checked={bookmarkBar}
+              onChange={setBookmarkBar}
+              label="Show classic bookmarks bar (Chrome / Firefox style)"
+            />
             <label className="onboarding-field">
               <span>Homepage</span>
               <input
@@ -160,14 +159,12 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                 spellCheck={false}
               />
             </label>
-            <label className="onboarding-toggle">
-              <input
-                type="checkbox"
-                checked={newTabUseHomepage}
-                onChange={(e) => setNewTabUseHomepage(e.target.checked)}
-              />
-              <span>Open homepage when creating new tabs</span>
-            </label>
+            <Switch
+              className="onboarding-toggle"
+              checked={newTabUseHomepage}
+              onChange={setNewTabUseHomepage}
+              label="Open homepage when creating new tabs"
+            />
             <div className="onboarding-actions">
               <button type="button" className="onboarding-secondary" onClick={goBack}>
                 Back

@@ -13,7 +13,7 @@
 
 !macro customWelcomePage
   !define MUI_WELCOMEPAGE_TITLE "Welcome to Inix"
-  !define MUI_WELCOMEPAGE_TEXT "This will install Inix on your computer.$\r$\n$\r$\nFast. Private. Yours.$\r$\n$\r$\nIt is recommended that you close all other applications before continuing.$\r$\n$\r$\nClick Next to continue."
+  !define MUI_WELCOMEPAGE_TEXT "This will install Inix on your computer.$\r$\n$\r$\nIt is recommended that you close all other applications before continuing.$\r$\n$\r$\nClick Next to continue."
   !insertMacro MUI_PAGE_WELCOME
 !macroend
 

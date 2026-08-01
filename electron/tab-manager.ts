@@ -22,11 +22,11 @@ import {
 
 import { getAutofillBootstrapScript } from "./autofill/inject";
 
-export const BASE_TOP_CHROME = 118;
-export const BOOKMARK_BAR_HEIGHT = 28;
+export const BASE_TOP_CHROME = 132;
+export const BOOKMARK_BAR_HEIGHT = 32;
 export const TOP_CHROME = BASE_TOP_CHROME;
 
-export const BOTTOM_CHROME = 28;
+export const BOTTOM_CHROME = 32;
 
 export const SIDEBAR_WIDTH = 360;
 

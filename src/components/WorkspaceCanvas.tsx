@@ -20,6 +20,7 @@ interface WorkspaceCanvasProps {
   onRemovePin: (bookmarkId: number) => void;
   onPinMove: (bookmarkId: number, x: number, y: number) => void;
   onViewportChange: (x: number, y: number, zoom: number) => void;
+  emptyHint?: string;
 }
 
 const nodeTypes: NodeTypes = {
@@ -52,23 +53,26 @@ export function WorkspaceCanvasView({
   onRemovePin,
   onPinMove,
   onViewportChange,
+  emptyHint,
 }: WorkspaceCanvasProps) {
   const handlers = useMemo(
     () => ({ onOpen, onOpenArchive, onRemovePin }),
     [onOpen, onOpenArchive, onRemovePin]
   );
 
+  const pins = canvas?.pins ?? [];
+
   const initialNodes = useMemo(
-    () => (canvas ? toNodes(canvas.pins, faviconCache, handlers) : []),
-    [canvas, faviconCache, handlers]
+    () => (canvas ? toNodes(pins, faviconCache, handlers) : []),
+    [canvas, pins, faviconCache, handlers]
   );
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
-    setNodes(canvas ? toNodes(canvas.pins, faviconCache, handlers) : []);
-  }, [canvas, faviconCache, handlers, setNodes]);
+    setNodes(canvas ? toNodes(pins, faviconCache, handlers) : []);
+  }, [canvas, pins, faviconCache, handlers, setNodes]);
 
   const onNodeDragStop = useCallback(
     (_: unknown, node: Node) => {
@@ -89,11 +93,30 @@ export function WorkspaceCanvasView({
   );
 
   if (!canvas) {
-    return <p className="library-loading">Loading workspace…</p>;
+    return (
+      <div className="library-body-state">
+        <span className="library-body-state-icon">◌</span>
+        <p>Loading workspace…</p>
+      </div>
+    );
   }
+
+  const isEmpty = pins.length === 0;
 
   return (
     <div className="workspace-canvas-wrap">
+      {isEmpty && (
+        <div className="library-empty-canvas">
+          <span className="library-empty-icon" aria-hidden="true">
+            ★
+          </span>
+          <h2>No bookmarks on this canvas</h2>
+          <p>
+            {emptyHint ??
+              "Bookmark a page from the toolbar, or import from Chrome in Settings → Library."}
+          </p>
+        </div>
+      )}
       <ReactFlow
         nodes={nodes}
         edges={[]}
@@ -106,14 +129,26 @@ export function WorkspaceCanvasView({
           y: canvas.workspace.viewport_y,
           zoom: canvas.workspace.zoom,
         }}
-        fitView={canvas.pins.length === 0}
-        minZoom={0.2}
-        maxZoom={2}
+        fitView={isEmpty}
+        minZoom={0.25}
+        maxZoom={1.75}
         proOptions={{ hideAttribution: true }}
       >
-        <Background gap={20} size={1} className="canvas-grid" />
-        <Controls showInteractive={false} />
-        <MiniMap pannable zoomable className="canvas-minimap" />
+        <Background gap={24} size={1} color="var(--border-subtle)" />
+        <Controls
+          className="canvas-controls"
+          showInteractive={false}
+          position="bottom-left"
+        />
+        {!isEmpty && (
+          <MiniMap
+            className="canvas-minimap"
+            pannable
+            zoomable
+            nodeColor={() => "#7c6aef"}
+            maskColor="rgba(8, 8, 12, 0.82)"
+          />
+        )}
       </ReactFlow>
     </div>
   );

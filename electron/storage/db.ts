@@ -121,6 +121,8 @@ function runMigrations(database: Database): void {
     bookmark_bar_enabled: "false",
     panic_configured: "false",
     panic_urls: "[]",
+    new_tab_quick_links:
+      '[{"label":"DuckDuckGo","url":"https://duckduckgo.com"},{"label":"GitHub","url":"https://github.com"},{"label":"Reddit","url":"https://reddit.com"},{"label":"Hacker News","url":"https://news.ycombinator.com"}]',
   };
 
   for (const [key, value] of Object.entries(defaults)) {

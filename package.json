@@ -1,13 +1,13 @@
 {
   "name": "inix-browser",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Inix — a fast, private browser",
   "homepage": "https://github.com/tcInitix/inix-browser",
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
     "build": "npm run installer:assets && tsc && vite build && electron-builder",
-    "installer:assets": "powershell -ExecutionPolicy Bypass -File scripts/generate-installer-assets.ps1",
+    "installer:assets": "powershell -ExecutionPolicy Bypass -File scripts/generate-installer-assets.ps1 && node scripts/generate-icon-ico.mjs",
     "build:inix": "vite build && electron-builder",
     "release": "node scripts/release.mjs",
     "release:local": "npm run installer:assets && tsc && vite build && electron-builder",
@@ -42,6 +42,7 @@
     "@vitejs/plugin-react": "^4.3.4",
     "electron": "^34.0.0",
     "electron-builder": "^25.1.8",
+    "png-to-ico": "^2.1.8",
     "typescript": "^5.7.2",
     "vite": "^6.0.6",
     "vite-plugin-electron": "^0.28.8",
@@ -55,8 +56,7 @@
     },
     "win": {
       "target": "nsis",
-      "icon": "public/icon.png",
-      "signAndEditExecutable": false
+      "icon": "build/icon.ico"
     },
     "nsis": {
       "include": "build/installer.nsh",

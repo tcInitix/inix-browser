@@ -11,7 +11,7 @@ export function TitleBar({ onOpenSettings, onOpenLibrary, onPanic, privateWindow
   return (
     <header className="title-bar">
       <div className="title-bar-brand">
-        <InixLogo height={22} className="brand-logo" />
+        <InixLogo height={26} className="brand-logo" />
         {privateWindow && <span className="title-private-badge">Private window</span>}
       </div>
       <div className="title-bar-actions">

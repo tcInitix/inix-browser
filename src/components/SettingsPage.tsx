@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { EngineStatus, UrlAlias, SiteRecord, PermissionGrant } from "../inix.d";
+import type { EngineStatus, UrlAlias, SiteRecord, PermissionGrant, ImportResult } from "../inix.d";
 import { RECOMMENDED_CHAT_MODELS, SUGGESTED_CHAT_MODEL } from "../constants/recommended-models";
 import {
   chatModelsFromOllama,
@@ -7,6 +7,7 @@ import {
   isModelInstalled,
 } from "../utils/ollama-models";
 import { VaultUnlockModal } from "./VaultUnlockModal";
+import { Switch } from "./Switch";
 import { serializePanicUrls, normalizePanicUrls } from "../utils/panic";
 import { friendlyUpdateError } from "../utils/update-text";
 
@@ -48,6 +49,25 @@ interface BrowserProfile {
   id: string;
   name: string;
   color: string;
+}
+
+interface ChromeProfileOption {
+  id: string;
+  name: string;
+  dir: string;
+}
+
+function formatImportResult(label: string, result: ImportResult): string {
+  if (result.canceled) return "";
+  if (!result.ok) return result.error ?? `${label} import failed.`;
+  const parts: string[] = [];
+  if (result.imported) parts.push(`${result.imported} new`);
+  if (result.updated) parts.push(`${result.updated} updated`);
+  if (result.skipped) parts.push(`${result.skipped} skipped`);
+  if (result.failed) parts.push(`${result.failed} failed`);
+  return parts.length
+    ? `${label}: ${parts.join(", ")}.`
+    : `${label}: nothing new to import.`;
 }
 
 interface AutofillFormData {
@@ -93,11 +113,11 @@ const NAV: { id: SettingsSection; label: string; icon: string }[] = [
   { id: "tabs", label: "Tabs & memory", icon: "▣" },
   { id: "history", label: "History", icon: "◷" },
   { id: "vault", label: "Vault", icon: "⛨" },
-  { id: "autofill", label: "Autofill", icon: "📋" },
-  { id: "profiles", label: "Profiles", icon: "👤" },
+  { id: "autofill", label: "Autofill", icon: "▤" },
+  { id: "profiles", label: "Profiles", icon: "◉" },
   { id: "library", label: "Library", icon: "★" },
   { id: "routes", label: "Quick routes", icon: "↗" },
-  { id: "privacy", label: "Privacy", icon: "🛡" },
+  { id: "privacy", label: "Privacy", icon: "◈" },
   { id: "data", label: "Data", icon: "⌂" },
 ];
 
@@ -146,6 +166,11 @@ export function SettingsPage({ onNavigate, onAliasesChanged, onBookmarkBarChange
   const [appVersion, setAppVersion] = useState("");
   const [updateMessage, setUpdateMessage] = useState<string | null>(null);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [chromeProfiles, setChromeProfiles] = useState<ChromeProfileOption[]>([]);
+  const [chromeProfileDir, setChromeProfileDir] = useState("");
+  const [importMessage, setImportMessage] = useState<string | null>(null);
+  const [importingBookmarks, setImportingBookmarks] = useState(false);
+  const [importingPasswords, setImportingPasswords] = useState(false);
 
   const refreshEngineStatus = useCallback(async () => {
     setRefreshingModels(true);
@@ -231,8 +256,8 @@ export function SettingsPage({ onNavigate, onAliasesChanged, onBookmarkBarChange
   const refreshVaultData = useCallback(async () => {
     const [configured, creds] = await Promise.all([
       window.inix?.vault.isConfigured(),
-      window.inix?.vault.isUnlocked().then((unlocked) =>
-        unlocked ? window.inix?.credentials.list() : []
+      window.inix?.vault.isUnlocked().then((isUnlocked) =>
+        isUnlocked ? window.inix?.credentials.list() : []
       ),
     ]);
     if (configured != null) setVaultConfigured(configured);
@@ -273,6 +298,139 @@ export function SettingsPage({ onNavigate, onAliasesChanged, onBookmarkBarChange
     if (section === "autofill") void refreshAutofill();
     if (section === "profiles") void refreshBrowserProfiles();
   }, [section, refreshPrivacy, refreshVaultData, refreshAutofill, refreshBrowserProfiles]);
+
+  useEffect(() => {
+    if (section !== "data" && section !== "vault" && section !== "library") return;
+    void window.inix?.import.chromeProfiles().then((res) => {
+      if (!res) return;
+      setChromeProfiles(res.profiles);
+      setChromeProfileDir((prev) => prev || res.profiles[0]?.dir || "");
+    });
+  }, [section]);
+
+  const importChromeBookmarks = async (pickFile = false) => {
+    setImportMessage(null);
+    setImportingBookmarks(true);
+    try {
+      const result = pickFile
+        ? await window.inix?.import.pickChromeBookmarks()
+        : await window.inix?.import.chromeBookmarks(chromeProfileDir || undefined);
+      if (!result || result.canceled) return;
+      setImportMessage(formatImportResult("Bookmarks", result));
+    } finally {
+      setImportingBookmarks(false);
+    }
+  };
+
+  const importChromePasswords = async (pickCsv = false) => {
+    setImportMessage(null);
+    const unlocked = await window.inix?.vault.isUnlocked();
+    if (!unlocked) {
+      setImportMessage("Unlock the vault before importing passwords.");
+      setVaultModalOpen(true);
+      return;
+    }
+    if (!vaultConfigured) {
+      setImportMessage("Set up the vault before importing passwords.");
+      setVaultModalOpen(true);
+      return;
+    }
+    setImportingPasswords(true);
+    try {
+      const result = pickCsv
+        ? await window.inix?.import.pickChromePasswordsCsv()
+        : await window.inix?.import.chromePasswords(chromeProfileDir || undefined);
+      if (!result || result.canceled) return;
+      setImportMessage(formatImportResult("Passwords", result));
+      await refreshVaultData();
+    } finally {
+      setImportingPasswords(false);
+    }
+  };
+
+  const chromeProfileSelect =
+    chromeProfiles.length > 0 ? (
+      <label className="settings-field">
+        <span>Chrome profile</span>
+        <select value={chromeProfileDir} onChange={(e) => setChromeProfileDir(e.target.value)}>
+          {chromeProfiles.map((p) => (
+            <option key={p.id} value={p.dir}>
+              {p.name}
+            </option>
+          ))}
+        </select>
+      </label>
+    ) : (
+      <p className="settings-note">
+        Chrome was not detected. You can still choose a Bookmarks or password CSV file manually.
+      </p>
+    );
+
+  const chromeBookmarkImportBlock = (
+    <div className="settings-import-block">
+      <p className="settings-subhead-inline">Import from Chrome</p>
+      {chromeProfileSelect}
+      <div className="settings-action-row">
+        <button
+          type="button"
+          className="settings-secondary-btn"
+          disabled={importingBookmarks || (!chromeProfileDir && chromeProfiles.length > 0)}
+          onClick={() => void importChromeBookmarks(false)}
+        >
+          {importingBookmarks ? "Importing…" : "Import bookmarks from Chrome"}
+        </button>
+        <button
+          type="button"
+          className="settings-secondary-btn"
+          disabled={importingBookmarks}
+          onClick={() => void importChromeBookmarks(true)}
+        >
+          Choose Bookmarks file…
+        </button>
+      </div>
+      <p className="settings-note">
+        Items on Chrome&apos;s bookmarks bar are added to Inix&apos;s bar. Close Chrome if import
+        fails because files are locked.
+      </p>
+    </div>
+  );
+
+  const chromePasswordImportBlock = (
+    <div className="settings-import-block">
+      <p className="settings-subhead-inline">Import from Chrome</p>
+      {chromeProfileSelect}
+      <div className="settings-action-row">
+        <button
+          type="button"
+          className="settings-secondary-btn"
+          disabled={importingPasswords || (!chromeProfileDir && chromeProfiles.length > 0)}
+          onClick={() => void importChromePasswords(false)}
+        >
+          {importingPasswords ? "Importing…" : "Import passwords from Chrome"}
+        </button>
+        <button
+          type="button"
+          className="settings-secondary-btn"
+          disabled={importingPasswords}
+          onClick={() => void importChromePasswords(true)}
+        >
+          Choose password CSV…
+        </button>
+      </div>
+      <p className="settings-note">
+        Passwords import directly from Chrome on Windows, or from a CSV export (Chrome → Password
+        Manager → Export). Unlock the vault first.
+      </p>
+    </div>
+  );
+
+  const chromeImportControls = (
+    <>
+      {chromeBookmarkImportBlock}
+      {chromePasswordImportBlock}
+      {importMessage && <p className="settings-callout">{importMessage}</p>}
+    </>
+  );
 
   const installed = engineStatus?.models ?? [];
   const isLocal = aiProvider === "local";
@@ -378,27 +536,16 @@ export function SettingsPage({ onNavigate, onAliasesChanged, onBookmarkBarChange
     }
   };
 
-  return (
-    <div className="settings-page">
-      <header className="settings-page-hero">
-        <div className="settings-page-hero-text">
-          <button type="button" className="settings-back-btn" onClick={() => onNavigate("inix://newtab")}>
-            ← Back
-          </button>
-          <h1>
-            <span className="logo-icon">◆</span> Settings
-          </h1>
-          <p className="settings-page-subtitle">Configure Inix AI, privacy, and browsing — everything stays local.</p>
-        </div>
-        <div className="settings-page-hero-actions">
-          <button type="button" className="settings-save-btn" onClick={() => void save()}>
-            {saved ? "Saved!" : "Save changes"}
-          </button>
-        </div>
-      </header>
+  const activeNav = NAV.find((item) => item.id === section);
 
-      <div className="settings-page-body">
-        <nav className="settings-nav">
+  return (
+    <div className="settings-page inix-page">
+      <aside className="settings-sidebar">
+        <button type="button" className="settings-back-btn" onClick={() => onNavigate("inix://newtab")}>
+          ← Back
+        </button>
+        <h1 className="settings-sidebar-title">Settings</h1>
+        <nav className="settings-nav" aria-label="Settings sections">
           {NAV.map((item) => (
             <button
               key={item.id}
@@ -411,8 +558,19 @@ export function SettingsPage({ onNavigate, onAliasesChanged, onBookmarkBarChange
             </button>
           ))}
         </nav>
+      </aside>
 
-        <div className="settings-content">
+      <div className="settings-main">
+        <header className="settings-topbar">
+          <div className="settings-topbar-title">
+            <h2>{activeNav?.label ?? "Settings"}</h2>
+          </div>
+          <button type="button" className="inix-btn-primary" onClick={() => void save()}>
+            {saved ? "Saved!" : "Save changes"}
+          </button>
+        </header>
+
+        <main className="settings-content">
           {section === "ai" && (
             <section className="settings-card">
               <div className="settings-card-head">
@@ -707,14 +865,12 @@ export function SettingsPage({ onNavigate, onAliasesChanged, onBookmarkBarChange
                   <p>Free RAM by hibernating tabs you are not using.</p>
                 </div>
               </div>
-              <label className="settings-toggle">
-                <input
-                  type="checkbox"
-                  checked={tabFreezeEnabled}
-                  onChange={(e) => setTabFreezeEnabled(e.target.checked)}
-                />
-                <span>Auto-hibernate inactive background tabs</span>
-              </label>
+              <Switch
+                className="settings-toggle"
+                checked={tabFreezeEnabled}
+                onChange={setTabFreezeEnabled}
+                label="Auto-hibernate inactive background tabs"
+              />
               <label className="settings-field">
                 <span>Hibernate after (minutes)</span>
                 <input
@@ -743,14 +899,12 @@ export function SettingsPage({ onNavigate, onAliasesChanged, onBookmarkBarChange
                   placeholder="inix://newtab or https://example.com"
                 />
               </label>
-              <label className="settings-toggle">
-                <input
-                  type="checkbox"
-                  checked={newTabUseHomepage}
-                  onChange={(e) => setNewTabUseHomepage(e.target.checked)}
-                />
-                <span>Open homepage instead of the Inix new tab page for new tabs</span>
-              </label>
+              <Switch
+                className="settings-toggle"
+                checked={newTabUseHomepage}
+                onChange={setNewTabUseHomepage}
+                label="Open homepage instead of the Inix new tab page for new tabs"
+              />
               <p className="settings-note">
                 Use <code>inix://newtab</code> for the default Inix start page, or any web address.
               </p>
@@ -907,14 +1061,12 @@ export function SettingsPage({ onNavigate, onAliasesChanged, onBookmarkBarChange
                   <option value="vaulted">Vaulted — encrypted behind master password</option>
                 </select>
               </label>
-              <label className="settings-toggle">
-                <input
-                  type="checkbox"
-                  checked={transientPurgeOnClose}
-                  onChange={(e) => setTransientPurgeOnClose(e.target.checked)}
-                />
-                <span>Purge transient history when Inix closes</span>
-              </label>
+              <Switch
+                className="settings-toggle"
+                checked={transientPurgeOnClose}
+                onChange={setTransientPurgeOnClose}
+                label="Purge transient history when Inix closes"
+              />
               <label className="settings-field">
                 <span>Transient retention (hours)</span>
                 <input
@@ -975,6 +1127,8 @@ export function SettingsPage({ onNavigate, onAliasesChanged, onBookmarkBarChange
                   <p className="settings-note">
                     Unlock the vault to view saved logins. Passwords are encrypted locally.
                   </p>
+                  {chromePasswordImportBlock}
+                  {importMessage && <p className="settings-callout">{importMessage}</p>}
                   {savedCredentials.length === 0 ? (
                     <p className="settings-note">No saved passwords yet.</p>
                   ) : (
@@ -1212,36 +1366,34 @@ export function SettingsPage({ onNavigate, onAliasesChanged, onBookmarkBarChange
                   <p>Control what Inix saves when you bookmark pages.</p>
                 </div>
               </div>
-              <label className="settings-toggle">
-                <input
-                  type="checkbox"
+              {chromeBookmarkImportBlock}
+              {importMessage && <p className="settings-callout">{importMessage}</p>}
+              <div className="settings-divider" />
+              <div className="settings-switch-group">
+                <Switch
+                  className="settings-toggle"
                   checked={archiveEnabled}
-                  onChange={(e) => setArchiveEnabled(e.target.checked)}
+                  onChange={setArchiveEnabled}
+                  label="Save Inix Archives when bookmarking (offline snapshots)"
                 />
-                <span>Save Inix Archives when bookmarking (offline snapshots)</span>
-              </label>
-              <label className="settings-toggle">
-                <input
-                  type="checkbox"
+                <Switch
+                  className="settings-toggle"
                   checked={captureEnabled}
-                  onChange={(e) => setCaptureEnabled(e.target.checked)}
+                  onChange={setCaptureEnabled}
+                  label="Save page content for Inix semantic search"
                 />
-                <span>Save page content for Inix semantic search</span>
-              </label>
-              <label className="settings-toggle">
-                <input
-                  type="checkbox"
+                <Switch
+                  className="settings-toggle"
                   checked={bookmarkBarEnabled}
-                  onChange={async (e) => {
-                    const enabled = e.target.checked;
+                  onChange={(enabled) => {
                     setBookmarkBarEnabled(enabled);
-                    await window.inix?.settings.set("bookmark_bar_enabled", enabled ? "true" : "false");
-                    await window.inix?.chrome.setBookmarkBar(enabled);
+                    void window.inix?.settings.set("bookmark_bar_enabled", enabled ? "true" : "false");
+                    void window.inix?.chrome.setBookmarkBar(enabled);
                     onBookmarkBarChange?.(enabled);
                   }}
+                  label="Show classic bookmarks bar (Chrome/Firefox-style strip under the toolbar)"
                 />
-                <span>Show classic bookmarks bar (Chrome/Firefox-style strip under the toolbar)</span>
-              </label>
+              </div>
               <p className="settings-note">
                 New bookmarks are added to the bar when this is on. Right-click a bar item to remove it.
               </p>
@@ -1286,6 +1438,13 @@ export function SettingsPage({ onNavigate, onAliasesChanged, onBookmarkBarChange
           {section === "data" && (
             <section className="settings-card">
               <div className="settings-card-head">
+                <div>
+                  <h2>Import from Chrome</h2>
+                  <p>Bring bookmarks and saved passwords into Inix from Google Chrome.</p>
+                </div>
+              </div>
+              {chromeImportControls}
+              <div className="settings-card-head" style={{ marginTop: 24 }}>
                 <div>
                   <h2>Updates</h2>
                   <p>Installed builds check GitHub Releases for new versions automatically.</p>
@@ -1367,7 +1526,7 @@ export function SettingsPage({ onNavigate, onAliasesChanged, onBookmarkBarChange
               </div>
             </section>
           )}
-        </div>
+          </main>
       </div>
 
       <VaultUnlockModal
