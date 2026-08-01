@@ -1,23 +1,22 @@
-# Inix v0.1.2
+# Inix v0.1.3
 
-Improve update UI to keep it human-readable.
+This update improves error handling for updates and adds dismissible overlays to various UI elements.
 
 ## What's new
-### Update UI improvements
 
-Update checks now show a friendly error message when the update fails due to a server-side issue.
+* Dismissible overlays are now available for the Update Prompt, Panic Setup, and Permission Prompts to provide a more user-friendly experience.
+* Error messages in the Update Prompt have been improved with more informative and friendly language.
+* The "Cannot parse releases feed" message has been added to the list of technical update dump markers.
 
 ## Improvements
-### AutoUpdater API updates
 
-The `resolveReleaseNotes` function has been added to handle technical dump errors. This ensures that users still get helpful error messages without being exposed to raw HTTP JSON.
+* Error handling for updates has been improved with better error messages and feedback to users.
 
 ## Fixes
-### Bug fixes
 
-Fixed an issue with update notes not showing up properly when the release notes were a technical dump. This fix also ensures that non-technical updates are now truncated at 4000 characters as expected.
+* Fixed an issue where the Update Prompt would not dismiss when clicking on the overlay's backdrop.
+* Fixed a rare case where the update feed from GitHub was not being read correctly, resulting in an error message that could be misleading.
 
 ## Notes
-### New feature: GitHub release body parsing
 
-The autoUpdater now fetches and parses the release body from GitHub's API, making it easier to show actual update notes without exposing raw data to users.
+We've also made some internal improvements behind the scenes to make Inix even more stable and efficient.

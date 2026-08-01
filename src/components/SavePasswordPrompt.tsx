@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { DismissibleOverlay } from "./DismissibleOverlay";
 
 export interface SavePasswordOffer {
   origin: string;
@@ -34,7 +35,7 @@ export function SavePasswordPrompt({ offer, onSave, onDismiss }: SavePasswordPro
   }
 
   return (
-    <div className="permission-overlay">
+    <DismissibleOverlay onDismiss={onDismiss}>
       <div className="permission-prompt">
         <h3>Save password?</h3>
         <p>
@@ -50,6 +51,6 @@ export function SavePasswordPrompt({ offer, onSave, onDismiss }: SavePasswordPro
           </button>
         </div>
       </div>
-    </div>
+    </DismissibleOverlay>
   );
 }

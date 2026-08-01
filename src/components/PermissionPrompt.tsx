@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import type { PermissionRequest } from "../inix.d";
+import { DismissibleOverlay } from "./DismissibleOverlay";
 
 interface PermissionPromptProps {
   request: PermissionRequest | null;
@@ -36,7 +37,7 @@ export function PermissionPrompt({ request, onRespond }: PermissionPromptProps) 
       : `wants access to ${label.toLowerCase()}.`;
 
   return (
-    <div className="permission-overlay">
+    <DismissibleOverlay onDismiss={() => onRespond(false)}>
       <div className="permission-prompt">
         <h3>{LABELS[request.permission] ?? "Site permission"}</h3>
         <p>
@@ -58,6 +59,6 @@ export function PermissionPrompt({ request, onRespond }: PermissionPromptProps) 
           </button>
         </div>
       </div>
-    </div>
+    </DismissibleOverlay>
   );
 }

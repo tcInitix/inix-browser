@@ -28,6 +28,8 @@ function isSilentUpdateError(message: string): boolean {
     m.includes("econnrefused") ||
     m.includes("latest.yml") ||
     m.includes("unable to find latest version") ||
+    m.includes("cannot parse releases feed") ||
+    m.includes("releases feed") ||
     m.includes('"statuscode"') ||
     m.includes("createhttperror")
   );

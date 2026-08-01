@@ -8,6 +8,7 @@ import {
 } from "../utils/ollama-models";
 import { VaultUnlockModal } from "./VaultUnlockModal";
 import { serializePanicUrls, normalizePanicUrls } from "../utils/panic";
+import { friendlyUpdateError } from "../utils/update-text";
 
 type AiProvider = "local" | "api";
 
@@ -211,7 +212,7 @@ export function SettingsPage({ onNavigate, onAliasesChanged, onBookmarkBarChange
     });
     const result = await window.inix?.update.check();
     if (!result?.ok) {
-      setUpdateMessage(result?.error ?? "Could not check for updates.");
+      setUpdateMessage(friendlyUpdateError(result?.error ?? "Could not check for updates."));
       setCheckingUpdate(false);
       unsubAvailable?.();
       unsubNotAvailable?.();

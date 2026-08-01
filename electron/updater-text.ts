@@ -9,7 +9,8 @@ const TECHNICAL_MARKERS = [
   "x-github-request-id",
   "set-cookie",
   "app.asar",
-  "electron-updater",
+  "cannot parse releases feed",
+  "releases feed",
 ];
 
 export function isTechnicalUpdateDump(text: string): boolean {
@@ -54,7 +55,16 @@ export function friendlyUpdateError(err: unknown): string {
     } catch {
       // not JSON
     }
+    const lower = raw.toLowerCase();
+    if (lower.includes("cannot parse releases feed") || lower.includes("releases feed")) {
+      return "Could not read the update feed from GitHub. The release may still be processing — try again shortly.";
+    }
     return "Could not reach the update server. Check your internet connection and try again.";
+  }
+
+  const lower = raw.toLowerCase();
+  if (lower.includes("cannot parse releases feed") || lower.includes("releases feed")) {
+    return "Could not read the update feed from GitHub. The release may still be processing — try again shortly.";
   }
 
   const firstLine = raw.split("\n")[0]?.trim() ?? "";

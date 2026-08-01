@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { normalizePanicUrls } from "../utils/panic";
+import { DismissibleOverlay } from "./DismissibleOverlay";
 
 interface PanicSetupProps {
   initialUrls?: string[];
@@ -41,8 +42,8 @@ export function PanicSetup({ initialUrls = [""], onSave, onCancel }: PanicSetupP
   };
 
   return (
-    <div className="panic-setup-overlay">
-      <form className="panic-setup-panel" onSubmit={(e) => void handleSubmit(e)}>
+    <DismissibleOverlay onDismiss={onCancel}>
+      <form className="panic-setup-panel permission-prompt" onSubmit={(e) => void handleSubmit(e)}>
         <h2>Set up Panic switch</h2>
         <p className="panic-setup-lead">
           Choose the safe pages to show when you hit the panic button. Use one URL or several — each
@@ -90,6 +91,6 @@ export function PanicSetup({ initialUrls = [""], onSave, onCancel }: PanicSetupP
           </button>
         </div>
       </form>
-    </div>
+    </DismissibleOverlay>
   );
 }

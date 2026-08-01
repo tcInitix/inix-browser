@@ -1,6 +1,6 @@
 {
   "name": "inix-browser",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Inix — a fast, private browser",
   "main": "dist-electron/main.js",
   "scripts": {

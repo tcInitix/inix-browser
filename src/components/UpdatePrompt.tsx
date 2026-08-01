@@ -1,3 +1,7 @@
+import { useEffect } from "react";
+import { DismissibleOverlay } from "./DismissibleOverlay";
+import { friendlyUpdateError, isTechnicalUpdateDump } from "../utils/update-text";
+
 export type UpdateState =
   | { status: "idle" }
   | { status: "available"; version: string; releaseNotes?: string }
@@ -12,36 +16,27 @@ interface UpdatePromptProps {
   onDismiss: () => void;
 }
 
-function looksLikeTechnicalDump(text: string): boolean {
-  const lower = text.toLowerCase();
-  return (
-    lower.includes('"statuscode"') ||
-    lower.includes("httpexecutor") ||
-    lower.includes("x-github-request-id") ||
-    lower.includes("content-security-policy") ||
-    lower.includes("app.asar")
-  );
-}
-
 function safeNotes(notes?: string): string | undefined {
   if (!notes?.trim()) return undefined;
-  if (looksLikeTechnicalDump(notes)) return undefined;
+  if (isTechnicalUpdateDump(notes)) return undefined;
   return notes.trim();
 }
 
-function safeError(message: string): string {
-  if (looksLikeTechnicalDump(message)) {
-    return "Something went wrong while fetching the update. Try again from Settings → Data.";
-  }
-  return message.length > 240 ? `${message.slice(0, 240)}…` : message;
-}
-
 export function UpdatePrompt({ state, onDownload, onInstall, onDismiss }: UpdatePromptProps) {
+  useEffect(() => {
+    if (state.status === "idle" || state.status === "downloading") return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onDismiss();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [state.status, onDismiss]);
+
   if (state.status === "idle") return null;
 
   if (state.status === "downloading") {
     return (
-      <div className="permission-overlay permission-overlay-passive">
+      <DismissibleOverlay passive>
         <div className="permission-prompt update-prompt">
           <h3>Downloading update…</h3>
           <div className="update-progress-track">
@@ -49,18 +44,16 @@ export function UpdatePrompt({ state, onDownload, onInstall, onDismiss }: Update
           </div>
           <p className="settings-note">{Math.round(state.percent)}%</p>
         </div>
-      </div>
+      </DismissibleOverlay>
     );
   }
 
   if (state.status === "ready") {
     return (
-      <div className="permission-overlay">
+      <DismissibleOverlay onDismiss={onDismiss}>
         <div className="permission-prompt update-prompt">
           <h3>Update ready</h3>
-          <p>
-            Inix {state.version} has been downloaded. Restart to finish installing.
-          </p>
+          <p>Inix {state.version} has been downloaded. Restart to finish installing.</p>
           <div className="permission-actions">
             <button type="button" className="permission-deny" onClick={onDismiss}>
               Later
@@ -70,30 +63,30 @@ export function UpdatePrompt({ state, onDownload, onInstall, onDismiss }: Update
             </button>
           </div>
         </div>
-      </div>
+      </DismissibleOverlay>
     );
   }
 
   if (state.status === "error") {
     return (
-      <div className="permission-overlay">
+      <DismissibleOverlay onDismiss={onDismiss}>
         <div className="permission-prompt update-prompt">
           <h3>Update failed</h3>
-          <p>{safeError(state.message)}</p>
+          <p>{friendlyUpdateError(state.message)}</p>
           <div className="permission-actions">
             <button type="button" className="permission-allow" onClick={onDismiss}>
               OK
             </button>
           </div>
         </div>
-      </div>
+      </DismissibleOverlay>
     );
   }
 
   const notes = safeNotes(state.releaseNotes);
 
   return (
-    <div className="permission-overlay">
+    <DismissibleOverlay onDismiss={onDismiss}>
       <div className="permission-prompt update-prompt">
         <h3>Update available</h3>
         <p>
@@ -113,6 +106,6 @@ export function UpdatePrompt({ state, onDownload, onInstall, onDismiss }: Update
           </button>
         </div>
       </div>
-    </div>
+    </DismissibleOverlay>
   );
 }

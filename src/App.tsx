@@ -84,8 +84,7 @@ export default function App() {
     panicSetupOpen ||
     !!permissionRequest ||
     !!savePasswordOffer ||
-    updateState.status === "available" ||
-    updateState.status === "ready" ||
+    updateState.status === "downloading" ||
     downloadsOpen ||
     !!readerContent ||
     searchOpen ||
