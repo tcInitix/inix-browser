@@ -1,6 +1,6 @@
 {
   "name": "inix-browser",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Inix — a fast, private browser",
   "homepage": "https://github.com/tcInitix/inix-browser",
   "main": "dist-electron/main.js",
@@ -43,6 +43,7 @@
     "electron": "^34.0.0",
     "electron-builder": "^25.1.8",
     "png-to-ico": "^2.1.8",
+    "rcedit": "^5.0.2",
     "typescript": "^5.7.2",
     "vite": "^6.0.6",
     "vite-plugin-electron": "^0.28.8",
@@ -51,12 +52,14 @@
   "build": {
     "appId": "com.inix.browser",
     "productName": "Inix",
+    "afterPack": "./scripts/after-pack.mjs",
     "directories": {
       "output": "release"
     },
     "win": {
       "target": "nsis",
-      "icon": "build/icon.ico"
+      "icon": "build/icon.ico",
+      "signAndEditExecutable": false
     },
     "nsis": {
       "include": "build/installer.nsh",
