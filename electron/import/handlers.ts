@@ -1,4 +1,4 @@
-import { ipcMain, dialog, BrowserWindow, type IpcMainInvokeEvent } from "electron";
+import { ipcMain, dialog, BrowserWindow, app, type IpcMainInvokeEvent } from "electron";
 import { importChromeBookmarksFromFile, importChromeBookmarksFromProfile } from "./chrome-bookmarks";
 import {
   importChromePasswordsFromProfile,
@@ -32,9 +32,11 @@ export function registerImportHandlers(): void {
   ipcMain.handle("import:pick-chrome-bookmarks", async (e) => {
     const win = windowFromEvent(e);
     const opts = {
-      title: "Select Chrome Bookmarks file",
+      title: "Import Chrome bookmarks",
+      defaultPath: app.getPath("downloads"),
       filters: [
-        { name: "Bookmarks", extensions: ["html", "htm", "json"] },
+        { name: "Chrome bookmarks export", extensions: ["html", "htm"] },
+        { name: "Chrome profile Bookmarks", extensions: ["json"] },
         { name: "All files", extensions: ["*"] },
       ],
       properties: ["openFile"] as ("openFile")[],

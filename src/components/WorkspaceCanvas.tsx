@@ -113,7 +113,7 @@ export function WorkspaceCanvasView({
           <h2>No bookmarks on this canvas</h2>
           <p>
             {emptyHint ??
-              "Bookmark a page from the toolbar, or import from Chrome in Settings → Library."}
+              "Bookmark a page from the toolbar, or import from Chrome in Settings → Library (export bookmarks as HTML first)."}
           </p>
         </div>
       )}

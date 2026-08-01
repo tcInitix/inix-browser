@@ -403,6 +403,7 @@ export interface ImportResult {
   updated?: number;
   skipped?: number;
   failed?: number;
+  parsed?: number;
 }
 
 declare global {

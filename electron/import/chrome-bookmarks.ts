@@ -34,7 +34,14 @@ function walkChromeBookmarks(
 }
 
 export function parseChromeBookmarksJson(raw: string): ImportBookmarkItem[] {
-  const data = JSON.parse(raw) as { roots?: Record<string, ChromeBookmarkNode> };
+  let data: { roots?: Record<string, ChromeBookmarkNode> };
+  try {
+    data = JSON.parse(raw) as { roots?: Record<string, ChromeBookmarkNode> };
+  } catch {
+    throw new Error(
+      "That file is not valid JSON. Export bookmarks from Chrome as HTML (Bookmark Manager → ⋮ → Export bookmarks)."
+    );
+  }
   const items: ImportBookmarkItem[] = [];
   const roots = data.roots;
   if (!roots) return items;
@@ -192,9 +199,30 @@ function copyForRead(src: string): { path: string; cleanup: () => void } {
 }
 
 export function importChromeBookmarksFromFile(filePath: string): ImportBookmarksResult {
-  const raw = fs.readFileSync(filePath, "utf8");
+  let raw: string;
+  try {
+    raw = fs.readFileSync(filePath, "utf8").replace(/^\uFEFF/, "");
+  } catch (err) {
+    const code = err && typeof err === "object" && "code" in err ? String(err.code) : "";
+    if (code === "EBUSY" || code === "EPERM" || code === "EACCES") {
+      throw new Error("That file is in use. Close Chrome and try again, or export bookmarks to HTML first.");
+    }
+    throw new Error("Could not read that file. Export bookmarks from Chrome and choose the saved HTML file.");
+  }
+
+  if (!raw.trim()) {
+    throw new Error("That file is empty. Export bookmarks from Chrome again.");
+  }
+
   const items = parseChromeBookmarksFile(raw);
-  return importBookmarks(items);
+  if (items.length === 0) {
+    throw new Error(
+      "No bookmarks found in that file. In Chrome open Bookmark Manager → ⋮ (menu) → Export bookmarks, then choose the saved .html file."
+    );
+  }
+
+  const result = importBookmarks(items);
+  return { ...result, parsed: items.length };
 }
 
 export function importChromeBookmarksFromProfile(profileDir: string): ImportBookmarksResult {

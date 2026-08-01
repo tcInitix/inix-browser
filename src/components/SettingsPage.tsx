@@ -65,9 +65,14 @@ function formatImportResult(label: string, result: ImportResult): string {
   if (result.updated) parts.push(`${result.updated} updated`);
   if (result.skipped) parts.push(`${result.skipped} skipped`);
   if (result.failed) parts.push(`${result.failed} failed`);
-  return parts.length
-    ? `${label}: ${parts.join(", ")}.`
-    : `${label}: nothing new to import.`;
+  if (parts.length) {
+    const fromFile = result.parsed != null ? ` (${result.parsed} found in file)` : "";
+    return `${label}: ${parts.join(", ")}${fromFile}.`;
+  }
+  if (result.parsed) {
+    return `${label}: all ${result.parsed} bookmarks were already in your library.`;
+  }
+  return `${label}: nothing new to import.`;
 }
 
 interface AutofillFormData {
@@ -308,13 +313,11 @@ export function SettingsPage({ onNavigate, onAliasesChanged, onBookmarkBarChange
     });
   }, [section]);
 
-  const importChromeBookmarks = async (pickFile = false) => {
+  const importChromeBookmarks = async () => {
     setImportMessage(null);
     setImportingBookmarks(true);
     try {
-      const result = pickFile
-        ? await window.inix?.import.pickChromeBookmarks()
-        : await window.inix?.import.chromeBookmarks(chromeProfileDir || undefined);
+      const result = await window.inix?.import.pickChromeBookmarks();
       if (!result || result.canceled) return;
       setImportMessage(formatImportResult("Bookmarks", result));
     } finally {
@@ -368,30 +371,33 @@ export function SettingsPage({ onNavigate, onAliasesChanged, onBookmarkBarChange
 
   const chromeBookmarkImportBlock = (
     <div className="settings-import-block">
-      <p className="settings-subhead-inline">Import from Chrome</p>
-      {chromeProfileSelect}
+      <p className="settings-subhead-inline">Import bookmarks from Chrome</p>
+      <ol className="settings-import-steps">
+        <li>
+          In Chrome, open <strong>Bookmark Manager</strong>{" "}
+          (<code>chrome://bookmarks</code> or press Ctrl+Shift+O).
+        </li>
+        <li>
+          Click the <strong>⋮</strong> menu (top right) → <strong>Export bookmarks</strong>.
+        </li>
+        <li>
+          Save the <strong>.html</strong> file (usually to Downloads), then click the button below
+          and choose that file.
+        </li>
+      </ol>
       <div className="settings-action-row">
         <button
           type="button"
-          className="settings-secondary-btn"
-          disabled={importingBookmarks || (!chromeProfileDir && chromeProfiles.length > 0)}
-          onClick={() => void importChromeBookmarks(false)}
-        >
-          {importingBookmarks ? "Importing…" : "Import bookmarks from Chrome"}
-        </button>
-        <button
-          type="button"
-          className="settings-secondary-btn"
+          className="settings-primary-btn"
           disabled={importingBookmarks}
-          onClick={() => void importChromeBookmarks(true)}
+          onClick={() => void importChromeBookmarks()}
         >
-          Choose bookmarks file…
+          {importingBookmarks ? "Importing…" : "Choose bookmarks file…"}
         </button>
       </div>
       <p className="settings-note">
-        Items on Chrome&apos;s bookmarks bar are added to Inix&apos;s bar. For manual import, use
-        Chrome&apos;s HTML export (Bookmark Manager → ⋮ → Export bookmarks). Close Chrome if profile
-        import fails because files are locked.
+        Chrome saves an HTML file — that is the one to pick. Bookmarks from Chrome&apos;s bar are
+        added to Inix&apos;s bar. Firefox and Edge HTML exports work too.
       </p>
     </div>
   );
@@ -427,7 +433,6 @@ export function SettingsPage({ onNavigate, onAliasesChanged, onBookmarkBarChange
 
   const chromeImportControls = (
     <>
-      {chromeBookmarkImportBlock}
       {chromePasswordImportBlock}
       {importMessage && <p className="settings-callout">{importMessage}</p>}
     </>
@@ -1441,7 +1446,7 @@ export function SettingsPage({ onNavigate, onAliasesChanged, onBookmarkBarChange
               <div className="settings-card-head">
                 <div>
                   <h2>Import from Chrome</h2>
-                  <p>Bring bookmarks and saved passwords into Inix from Google Chrome.</p>
+                  <p>Import saved passwords from Chrome. Bookmarks are imported via an exported file — see Library.</p>
                 </div>
               </div>
               {chromeImportControls}

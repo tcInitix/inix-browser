@@ -2326,6 +2326,23 @@ h3,
   margin-bottom: 0;
 }
 
+.settings-import-steps {
+  margin: 0 0 var(--space-3);
+  padding-left: 1.25rem;
+  color: var(--text-secondary);
+  font-size: var(--text-body);
+  line-height: 1.55;
+}
+
+.settings-import-steps li + li {
+  margin-top: var(--space-2);
+}
+
+.settings-import-steps code {
+  font-size: 0.9em;
+  color: var(--text-muted);
+}
+
 .settings-subhead-inline {
   margin: 0 0 var(--space-3);
   font-size: var(--text-caption);
@@ -3660,21 +3677,25 @@ h3,
   background: var(--bg-hover);
 }
 
-/* Downloads panel */
-.panel-overlay {
+/* Downloads panel — dropdown under toolbar; page stays visible behind */
+.downloads-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  z-index: 8000;
-  display: flex;
-  align-items: flex-start;
-  justify-content: flex-end;
-  padding: 48px 16px 16px;
+  z-index: 7999;
+  border: none;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  cursor: default;
 }
 
 .downloads-panel {
-  width: 360px;
-  max-height: 70vh;
+  position: fixed;
+  top: calc(var(--title-bar-height) + var(--tab-bar-height) + var(--nav-bar-height) + 6px);
+  right: 12px;
+  z-index: 8000;
+  width: min(360px, calc(100vw - 24px));
+  max-height: min(420px, calc(100vh - var(--title-bar-height) - var(--tab-bar-height) - var(--nav-bar-height) - 48px));
   background: var(--bg-surface);
   border: 1px solid var(--border-hairline);
   border-radius: var(--radius-lg);
@@ -3682,6 +3703,13 @@ h3,
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+.inix-shell.bookmark-bar-open .downloads-panel {
+  top: calc(
+    var(--title-bar-height) + var(--tab-bar-height) + var(--nav-bar-height) +
+      var(--bookmark-bar-height) + 6px
+  );
 }
 
 .panel-header {

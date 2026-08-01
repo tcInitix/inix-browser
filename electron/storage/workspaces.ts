@@ -94,6 +94,66 @@ export function setPin(
   saveDatabase();
 }
 
+const PIN_WIDTH = 240;
+const PIN_HEIGHT = 120;
+const PIN_GAP = 24;
+const PIN_COLS = 4;
+const PIN_ORIGIN_X = 80;
+const PIN_ORIGIN_Y = 80;
+
+/** Place a pin on a grid so bulk imports do not stack on one spot. */
+export function pinBookmarkAtLayoutIndex(
+  workspaceId: number,
+  bookmarkId: number,
+  layoutIndex: number
+): void {
+  const col = layoutIndex % PIN_COLS;
+  const row = Math.floor(layoutIndex / PIN_COLS);
+  const x = PIN_ORIGIN_X + col * (PIN_WIDTH + PIN_GAP);
+  const y = PIN_ORIGIN_Y + row * (PIN_HEIGHT + PIN_GAP);
+  setPin(workspaceId, bookmarkId, x, y, PIN_WIDTH, PIN_HEIGHT, layoutIndex);
+}
+
+export function isBookmarkPinned(workspaceId: number, bookmarkId: number): boolean {
+  const rows = runQuery<{ cnt: number }>(
+    "SELECT COUNT(*) AS cnt FROM workspace_pins WHERE workspace_id = ? AND bookmark_id = ?",
+    [workspaceId, bookmarkId]
+  );
+  return (rows[0]?.cnt ?? 0) > 0;
+}
+
+export function countWorkspacePins(workspaceId: number): number {
+  const rows = runQuery<{ cnt: number }>(
+    "SELECT COUNT(*) AS cnt FROM workspace_pins WHERE workspace_id = ?",
+    [workspaceId]
+  );
+  return rows[0]?.cnt ?? 0;
+}
+
+/** Spread pins that share the same coordinates (e.g. after a bulk import bug). */
+export function relayoutStackedPinsIfNeeded(workspaceId: number): void {
+  const pins = runQuery<{ bookmark_id: number; x: number; y: number }>(
+    "SELECT bookmark_id, x, y FROM workspace_pins WHERE workspace_id = ? ORDER BY bookmark_id ASC",
+    [workspaceId]
+  );
+  if (pins.length <= 1) return;
+
+  const byPos = new Map<string, number[]>();
+  for (const pin of pins) {
+    const key = `${pin.x},${pin.y}`;
+    const ids = byPos.get(key) ?? [];
+    ids.push(pin.bookmark_id);
+    byPos.set(key, ids);
+  }
+
+  const hasStack = [...byPos.values()].some((ids) => ids.length > 1);
+  if (!hasStack) return;
+
+  pins.forEach((pin, index) => {
+    pinBookmarkAtLayoutIndex(workspaceId, pin.bookmark_id, index);
+  });
+}
+
 export function removePin(workspaceId: number, bookmarkId: number): void {
   runExec("DELETE FROM workspace_pins WHERE workspace_id = ? AND bookmark_id = ?", [
     workspaceId,
@@ -103,6 +163,8 @@ export function removePin(workspaceId: number, bookmarkId: number): void {
 }
 
 export function getWorkspaceCanvas(workspaceId: number): WorkspaceCanvas {
+  relayoutStackedPinsIfNeeded(workspaceId);
+
   const workspace = runQuery<Workspace>("SELECT * FROM workspaces WHERE id = ?", [workspaceId])[0];
   if (!workspace) throw new Error("Workspace not found");
 
@@ -130,7 +192,7 @@ function getTagsForBookmark(bookmarkId: number): string[] {
 }
 
 export function pinBookmarkAtCenter(workspaceId: number, bookmarkId: number): void {
-  setPin(workspaceId, bookmarkId, 120, 120, 240, 120, Date.now() % 1000);
+  pinBookmarkAtLayoutIndex(workspaceId, bookmarkId, countWorkspacePins(workspaceId));
 }
 
 export function getAllTags(): string[] {

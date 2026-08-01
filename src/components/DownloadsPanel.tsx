@@ -29,11 +29,17 @@ export function DownloadsPanel({ open, onClose }: DownloadsPanelProps) {
   if (!open) return null;
 
   return (
-    <div className="panel-overlay" onClick={onClose}>
-      <div className="downloads-panel" onClick={(e) => e.stopPropagation()}>
+    <>
+      <button
+        type="button"
+        className="downloads-backdrop"
+        aria-label="Close downloads"
+        onClick={onClose}
+      />
+      <div className="downloads-panel" role="dialog" aria-label="Downloads">
         <header className="panel-header">
           <h2>Downloads</h2>
-          <button onClick={onClose} aria-label="Close">
+          <button type="button" onClick={onClose} aria-label="Close">
             ✕
           </button>
         </header>
@@ -69,6 +75,6 @@ export function DownloadsPanel({ open, onClose }: DownloadsPanelProps) {
           </footer>
         )}
       </div>
-    </div>
+    </>
   );
 }

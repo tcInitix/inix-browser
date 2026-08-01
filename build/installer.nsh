@@ -71,6 +71,12 @@ ShowUninstDetails show
   DetailPrint "Creating Start Menu shortcut..."
   DetailPrint "Creating desktop shortcut (if enabled)..."
   DetailPrint "Registering uninstall information..."
+  ; Update mode stages the previous version under $PLUGINSDIR\old-install — remove it.
+  DetailPrint "Cleaning up files from the previous version..."
+  ClearErrors
+  RMDir /r "$PLUGINSDIR\old-install"
+  ; Older uninstallers may leave staging folders in other NSIS temp dirs after an update.
+  nsExec::ExecToLog `$SYSDIR\cmd.exe /c for /d %G in ("%TEMP%\nsm*.tmp") do @if exist "%G\old-install" rd /s /q "%G\old-install"`
   DetailPrint "${PRODUCT_NAME} ${VERSION} installed successfully."
 !macroend
 
@@ -78,6 +84,10 @@ ShowUninstDetails show
   SetDetailsPrint both
   DetailPrint "Removing ${PRODUCT_NAME} shortcuts..."
   DetailPrint "Removing program files..."
+  ; During in-place updates, files are moved here first — delete the staged copy.
+  DetailPrint "Removing staged application files..."
+  ClearErrors
+  RMDir /r "$PLUGINSDIR\old-install"
   DetailPrint "Cleaning up registry entries..."
   DetailPrint "${PRODUCT_NAME} was removed from this computer."
 !macroend

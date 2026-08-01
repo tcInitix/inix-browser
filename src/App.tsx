@@ -86,7 +86,6 @@ export default function App() {
     !!permissionRequest ||
     !!savePasswordOffer ||
     updateState.status === "downloading" ||
-    downloadsOpen ||
     !!readerContent ||
     searchOpen ||
     historyOpen;

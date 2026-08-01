@@ -4,7 +4,14 @@ import { tabManager } from "../tab-manager";
 import { captureFromTab, saveArchiveSnapshot } from "./archive-service";
 import { extractAutoTags, parseTagsFromTitle } from "./tagging";
 import { queueEmbedding } from "./vector-index";
-import { pinBookmarkAtCenter, getDefaultWorkspaceId, setPin } from "./workspaces";
+import {
+  pinBookmarkAtLayoutIndex,
+  pinBookmarkAtCenter,
+  getDefaultWorkspaceId,
+  setPin,
+  isBookmarkPinned,
+  countWorkspacePins,
+} from "./workspaces";
 import { getSettings } from "./settings";
 import { EXTRACT_PAGE_SCRIPT } from "./page-extractor";
 
@@ -101,6 +108,7 @@ export interface ImportBookmarksResult {
   imported: number;
   updated: number;
   skipped: number;
+  parsed?: number;
 }
 
 export function importBookmarks(items: ImportBookmarkItem[]): ImportBookmarksResult {
@@ -108,6 +116,7 @@ export function importBookmarks(items: ImportBookmarkItem[]): ImportBookmarksRes
   let updated = 0;
   let skipped = 0;
   const wsId = getDefaultWorkspaceId();
+  let layoutIndex = countWorkspacePins(wsId);
 
   for (const item of items) {
     const url = item.url?.trim();
@@ -120,13 +129,16 @@ export function importBookmarks(items: ImportBookmarkItem[]): ImportBookmarksRes
     const existing = getBookmarkByUrl(url);
     if (existing) {
       if (item.onBar) setBookmarkOnBar(existing.id, true);
+      if (!isBookmarkPinned(wsId, existing.id)) {
+        pinBookmarkAtLayoutIndex(wsId, existing.id, layoutIndex++);
+      }
       updated++;
       continue;
     }
 
     const bookmark = addBookmark(url, title);
     if (item.onBar) setBookmarkOnBar(bookmark.id, true);
-    pinBookmarkAtCenter(wsId, bookmark.id);
+    pinBookmarkAtLayoutIndex(wsId, bookmark.id, layoutIndex++);
     imported++;
   }
 

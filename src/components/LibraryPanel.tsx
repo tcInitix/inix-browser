@@ -130,7 +130,7 @@ export function LibraryPanel({ onNavigate }: LibraryPanelProps) {
 
   const emptyCanvasHint =
     totalBookmarks === 0
-      ? "Bookmark a page from the toolbar, or import from Chrome in Settings → Library."
+      ? "Bookmark a page from the toolbar, or import from Chrome in Settings → Library (export bookmarks as HTML first)."
       : hasFilters
         ? "No bookmarks match your search or tags. Try clearing filters."
         : undefined;
@@ -243,7 +243,7 @@ export function LibraryPanel({ onNavigate }: LibraryPanelProps) {
                   <p>
                     {hasFilters
                       ? "Try a different search or clear tag filters."
-                      : "Star a page from the toolbar, or import from Chrome in Settings → Library."}
+                      : "Star a page from the toolbar, or import from Chrome in Settings → Library (export as HTML first)."}
                   </p>
                 </li>
               )}
