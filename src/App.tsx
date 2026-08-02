@@ -18,6 +18,7 @@ import { VaultUnlockModal } from "./components/VaultUnlockModal";
 import { BookmarkBar } from "./components/BookmarkBar";
 import { UpdatePrompt, type UpdateState } from "./components/UpdatePrompt";
 import { OnboardingFlow, type OnboardingResult } from "./components/OnboardingFlow";
+import { BootSplash } from "./components/BootSplash";
 import { PanicSetup } from "./components/PanicSetup";
 import type { PermissionRequest, InixSettings } from "./inix.d";
 import { parsePanicUrls, serializePanicUrls, normalizePanicUrls } from "./utils/panic";
@@ -50,6 +51,7 @@ export default function App() {
   const [tabs, setTabs] = useState<Tab[]>([]);
   const [activeTabId, setActiveTabId] = useState("");
   const [sessionReady, setSessionReady] = useState(false);
+  const [bootDone, setBootDone] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [aiInject, setAiInject] = useState<AiInjectRequest | null>(null);
@@ -934,6 +936,15 @@ export default function App() {
     });
     return () => unsub?.();
   }, []);
+
+  if (!bootDone) {
+    return (
+      <BootSplash
+        ready={sessionReady && !!activeTab}
+        onFinish={() => setBootDone(true)}
+      />
+    );
+  }
 
   if (!sessionReady || !activeTab) {
     return <div className="inix-shell loading-shell">Loading Inix…</div>;
