@@ -6,7 +6,7 @@ import path from "node:path";
 import { saveCredentialsBatch, type CredentialImportItem } from "../storage/credentials";
 import { saveDatabase } from "../storage/db";
 import { isVaultUnlocked } from "../storage/vault";
-import { dpapiUnprotect, isDpapiAvailable } from "./dpapi";
+import { dpapiUnprotect, dpapiUnprotectBatch, isDpapiAvailable } from "./dpapi";
 import { getChromeProfilePaths } from "./chrome-paths";
 import { queryExternalSqlite } from "./sqlite-read";
 
@@ -64,41 +64,33 @@ function toBuffer(value: unknown): Buffer {
   return Buffer.alloc(0);
 }
 
-function decryptChromePassword(
+function decryptChromePasswordAes(encrypted: Buffer, aesKey: Buffer): string | null {
+  const nonce = encrypted.slice(3, 15);
+  const payload = encrypted.slice(15);
+  if (payload.length < 16) return null;
+  const tag = payload.slice(-16);
+  const ciphertext = payload.slice(0, -16);
+  try {
+    const decipher = crypto.createDecipheriv("aes-256-gcm", aesKey, nonce);
+    decipher.setAuthTag(tag);
+    return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString("utf8");
+  } catch {
+    return null;
+  }
+}
+
+function classifyEncryptedPassword(
   encrypted: Buffer,
   aesKey: Buffer | null
-): { password: string | null; appBound?: boolean } {
-  if (encrypted.length === 0) return { password: "" };
+): { kind: "empty" } | { kind: "app-bound" } | { kind: "aes" } | { kind: "legacy" } {
+  if (encrypted.length === 0) return { kind: "empty" };
 
   const prefix = encrypted.slice(0, 3).toString("utf8");
-  if (prefix === "v20") {
-    return { password: null, appBound: true };
-  }
-
+  if (prefix === "v20") return { kind: "app-bound" };
   if (prefix === "v10" || prefix === "v11") {
-    if (!aesKey) return { password: null };
-    const nonce = encrypted.slice(3, 15);
-    const payload = encrypted.slice(15);
-    if (payload.length < 16) return { password: null };
-    const tag = payload.slice(-16);
-    const ciphertext = payload.slice(0, -16);
-    try {
-      const decipher = crypto.createDecipheriv("aes-256-gcm", aesKey, nonce);
-      decipher.setAuthTag(tag);
-      return {
-        password: Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString("utf8"),
-      };
-    } catch {
-      return { password: null };
-    }
+    return aesKey ? { kind: "aes" } : { kind: "legacy" };
   }
-
-  if (!isDpapiAvailable()) return { password: null };
-  try {
-    return { password: dpapiUnprotect(encrypted).toString("utf8") };
-  } catch {
-    return { password: null };
-  }
+  return { kind: "legacy" };
 }
 
 function copyForRead(src: string): { path: string; cleanup: () => void } {
@@ -176,32 +168,71 @@ export async function importChromePasswordsFromProfile(
 
     const parsed = logins.length;
     const rows: CredentialImportItem[] = [];
+    const legacyBlobs: Buffer[] = [];
+    const legacyMeta: Array<{ url: string; username: string }> = [];
     let undecryptable = 0;
     let appBound = 0;
 
     onProgress?.({ phase: "decrypting", current: 0, total: parsed });
     for (let i = 0; i < logins.length; i++) {
       const login = logins[i];
+      const url = String(login.origin_url ?? "");
+      const username = String(login.username_value ?? "").trim();
       const encrypted = toBuffer(login.password_value);
-      const decrypted = decryptChromePassword(encrypted, aesKey);
-      if (decrypted.password == null) {
-        undecryptable++;
-        if (decrypted.appBound) appBound++;
-      } else {
-        const url = String(login.origin_url ?? "");
-        const origin = urlToOrigin(url);
+      const kind = classifyEncryptedPassword(encrypted, aesKey);
+
+      if (kind.kind === "empty") {
         rows.push({
-          origin,
-          username: String(login.username_value ?? "").trim(),
-          password: decrypted.password,
-          title: url.trim() || origin,
+          origin: urlToOrigin(url),
+          username,
+          password: "",
+          title: url.trim() || urlToOrigin(url),
         });
+      } else if (kind.kind === "app-bound") {
+        undecryptable++;
+        appBound++;
+      } else if (kind.kind === "aes" && aesKey) {
+        const password = decryptChromePasswordAes(encrypted, aesKey);
+        if (password == null) undecryptable++;
+        else {
+          rows.push({
+            origin: urlToOrigin(url),
+            username,
+            password,
+            title: url.trim() || urlToOrigin(url),
+          });
+        }
+      } else {
+        legacyBlobs.push(encrypted);
+        legacyMeta.push({ url, username });
       }
 
       if (i > 0 && i % YIELD_EVERY === 0) {
         onProgress?.({ phase: "decrypting", current: i, total: parsed });
         await yieldToEventLoop();
       }
+    }
+
+    if (legacyBlobs.length > 0 && isDpapiAvailable()) {
+      onProgress?.({ phase: "decrypting", current: parsed, total: parsed });
+      await yieldToEventLoop();
+      const decryptedLegacy = dpapiUnprotectBatch(legacyBlobs);
+      for (let i = 0; i < legacyMeta.length; i++) {
+        const plain = decryptedLegacy[i];
+        const meta = legacyMeta[i];
+        if (!plain) {
+          undecryptable++;
+          continue;
+        }
+        rows.push({
+          origin: urlToOrigin(meta.url),
+          username: meta.username,
+          password: plain.toString("utf8"),
+          title: meta.url.trim() || urlToOrigin(meta.url),
+        });
+      }
+    } else if (legacyBlobs.length > 0) {
+      undecryptable += legacyBlobs.length;
     }
 
     const saved = await importPasswordRows(rows, onProgress);
