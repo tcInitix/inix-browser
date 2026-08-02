@@ -1,6 +1,6 @@
 {
   "name": "inix-browser",
-  "version": "0.1.21",
+  "version": "0.1.22",
   "description": "Inix — a fast, private browser",
   "homepage": "https://github.com/tcInitix/inix-browser",
   "main": "dist-electron/main.js",
@@ -57,6 +57,13 @@
     "directories": {
       "output": "release"
     },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "package.json",
+      "!release{,/**/*}",
+      "!release-build{,/**/*}"
+    ],
     "win": {
       "target": "nsis",
       "icon": "build/icon.ico",

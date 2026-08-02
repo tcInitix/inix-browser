@@ -143,8 +143,9 @@ function prepareReleaseBuild() {
     }
   }
 
-  // Cursor/Defender often lock release/win-unpacked/app.asar in this workspace.
-  // Build into a fresh output dir so electron-builder never has to delete the stale tree.
+  // electron-builder auto-excludes the output dir from the app package. When we
+  // build into release-build/, the release/ folder (full of old .exe installers)
+  // is no longer excluded and can bloat app.asar to ~1.5 GB — see package.json files.
   const buildOutput = path.join(ROOT, "release-build");
   fs.mkdirSync(buildOutput, { recursive: true });
   return buildOutput;
