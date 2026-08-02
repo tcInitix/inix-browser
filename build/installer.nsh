@@ -5,6 +5,63 @@
 !include "getProcessInfo.nsh"
 Var pid
 
+; Kill the full Inix process tree (main + GPU/utility/renderer children).
+!macro inixForceCloseAppImpl
+  DetailPrint "Closing all ${PRODUCT_NAME} processes..."
+  !ifdef INSTALL_MODE_PER_ALL_USERS
+    nsExec::Exec `taskkill /im "${PRODUCT_FILENAME}.exe" /fi "PID ne $pid" /t`
+  !else
+    nsExec::Exec `"$SYSDIR\cmd.exe" /c taskkill /im "${PRODUCT_FILENAME}.exe" /fi "PID ne $pid" /fi "USERNAME eq %USERNAME%" /t`
+  !endif
+  Sleep 500
+  StrCpy $R1 0
+  inixForceCloseLoop:
+    IntOp $R1 $R1 + 1
+    !ifdef INSTALL_MODE_PER_ALL_USERS
+      ${nsProcess::FindProcess} "${PRODUCT_FILENAME}.exe" $R0
+    !else
+      nsExec::Exec `"$SYSDIR\cmd.exe" /c tasklist /FI "USERNAME eq %USERNAME%" /FI "IMAGENAME eq ${PRODUCT_FILENAME}.exe" /FO csv | "$SYSDIR\find.exe" "${PRODUCT_FILENAME}.exe"`
+      Pop $R0
+    !endif
+    IntCmp $R0 0 0 inixForceCloseDone
+      Sleep 800
+      !ifdef INSTALL_MODE_PER_ALL_USERS
+        nsExec::Exec `taskkill /f /im "${PRODUCT_FILENAME}.exe" /fi "PID ne $pid" /t`
+      !else
+        nsExec::Exec `"$SYSDIR\cmd.exe" /c taskkill /f /im "${PRODUCT_FILENAME}.exe" /fi "PID ne $pid" /fi "USERNAME eq %USERNAME%" /t`
+      !endif
+      !ifdef INSTALL_MODE_PER_ALL_USERS
+        ${nsProcess::FindProcess} "${PRODUCT_FILENAME}.exe" $R0
+      !else
+        nsExec::Exec `"$SYSDIR\cmd.exe" /c tasklist /FI "USERNAME eq %USERNAME%" /FI "IMAGENAME eq ${PRODUCT_FILENAME}.exe" /FO csv | "$SYSDIR\find.exe" "${PRODUCT_FILENAME}.exe"`
+        Pop $R0
+      !endif
+      IntCmp $R0 0 0 inixForceCloseDone
+        DetailPrint "Waiting for ${PRODUCT_NAME} to close."
+        Sleep 1500
+        Goto inixForceCloseLoop
+    IntCmp $R1 8 inixForceCloseDone inixForceCloseLoop inixForceCloseDone
+  inixForceCloseDone:
+!macroend
+
+!ifndef BUILD_UNINSTALLER
+  Function inixForceCloseApp
+    !insertmacro inixForceCloseAppImpl
+  FunctionEnd
+!else
+  Function un.inixForceCloseApp
+    !insertmacro inixForceCloseAppImpl
+  FunctionEnd
+!endif
+
+!macro inixForceCloseAppCall
+  !ifndef BUILD_UNINSTALLER
+    Call inixForceCloseApp
+  !else
+    Call un.inixForceCloseApp
+  !endif
+!macroend
+
 !ifndef BUILD_UNINSTALLER
   ; #region agent log — install debug log ($TEMP\inix-debug-7afe24.log)
   Function inixWriteDebugLog
@@ -20,45 +77,6 @@ Var pid
     DetailPrint "$0"
     Pop $1
     Pop $0
-  FunctionEnd
-
-  ; Use APP_GUID / UNINSTALL_APP_KEY (command-line defines) — safe in Functions at parse time.
-  Function inixForceCloseApp
-    DetailPrint "Closing running ${PRODUCT_NAME}..."
-    !ifdef INSTALL_MODE_PER_ALL_USERS
-      nsExec::Exec `taskkill /im "${PRODUCT_FILENAME}.exe" /fi "PID ne $pid" /t`
-    !else
-      nsExec::Exec `"$SYSDIR\cmd.exe" /c taskkill /im "${PRODUCT_FILENAME}.exe" /fi "PID ne $pid" /fi "USERNAME eq %USERNAME%" /t`
-    !endif
-    Sleep 500
-    StrCpy $R1 0
-    inixForceCloseLoop:
-      IntOp $R1 $R1 + 1
-      !ifdef INSTALL_MODE_PER_ALL_USERS
-        ${nsProcess::FindProcess} "${PRODUCT_FILENAME}.exe" $R0
-      !else
-        nsExec::Exec `"$SYSDIR\cmd.exe" /c tasklist /FI "USERNAME eq %USERNAME%" /FI "IMAGENAME eq ${PRODUCT_FILENAME}.exe" /FO csv | "$SYSDIR\find.exe" "${PRODUCT_FILENAME}.exe"`
-        Pop $R0
-      !endif
-      IntCmp $R0 0 0 inixForceCloseDone
-        Sleep 800
-        !ifdef INSTALL_MODE_PER_ALL_USERS
-          nsExec::Exec `taskkill /f /im "${PRODUCT_FILENAME}.exe" /fi "PID ne $pid" /t`
-        !else
-          nsExec::Exec `"$SYSDIR\cmd.exe" /c taskkill /f /im "${PRODUCT_FILENAME}.exe" /fi "PID ne $pid" /fi "USERNAME eq %USERNAME%" /t`
-        !endif
-        !ifdef INSTALL_MODE_PER_ALL_USERS
-          ${nsProcess::FindProcess} "${PRODUCT_FILENAME}.exe" $R0
-        !else
-          nsExec::Exec `"$SYSDIR\cmd.exe" /c tasklist /FI "USERNAME eq %USERNAME%" /FI "IMAGENAME eq ${PRODUCT_FILENAME}.exe" /FO csv | "$SYSDIR\find.exe" "${PRODUCT_FILENAME}.exe"`
-          Pop $R0
-        !endif
-        IntCmp $R0 0 0 inixForceCloseDone
-          DetailPrint "Waiting for ${PRODUCT_NAME} to close."
-          Sleep 1500
-          Goto inixForceCloseLoop
-      IntCmp $R1 8 inixForceCloseDone inixForceCloseLoop inixForceCloseDone
-    inixForceCloseDone:
   FunctionEnd
 
   Function inixRetryUninstallInPlace
@@ -101,7 +119,7 @@ Var pid
 
     IntCmp $R0 0 inixRetryUninstallDone 0 0
       DetailPrint "In-place uninstall failed ($R0). Closing ${PRODUCT_NAME} and clearing install folder..."
-      Call inixForceCloseApp
+      !insertmacro inixForceCloseAppCall
       SetOutPath $TEMP
       RMDir /r "$R3"
       Push "H3:fallback-rmdir inst=$R3 after=$R0"
@@ -116,7 +134,7 @@ Var pid
   FunctionEnd
 
   Function inixCustomUnInstallCheck
-    Call inixForceCloseApp
+    !insertmacro inixForceCloseAppCall
     Push "H4:uninstall-old-version-exit code=$R0"
     Call inixWriteDebugLog
     IntCmp $R0 0 inixCustomUnInstallCheckDone
@@ -171,23 +189,23 @@ ShowUninstDetails show
 !macro customCheckAppRunning
   SetDetailsPrint both
   DetailPrint "Checking for running ${PRODUCT_NAME}..."
+  !insertmacro inixForceCloseAppCall
   !ifndef BUILD_UNINSTALLER
     Push "H2:check-app-running start"
     Call inixWriteDebugLog
-    Call inixForceCloseApp
   !endif
   ; Use electron-builder's default close/retry logic (PID-safe, per-user aware).
   !insertmacro _CHECK_APP_RUNNING
   !ifndef BUILD_UNINSTALLER
     Push "H2:check-app-running done"
     Call inixWriteDebugLog
+    DetailPrint "Ready to install ${PRODUCT_NAME} ${VERSION}."
   !endif
-  DetailPrint "Ready to install ${PRODUCT_NAME} ${VERSION}."
 !macroend
 
 !ifndef BUILD_UNINSTALLER
   !macro preInit
-    Call inixForceCloseApp
+    !insertmacro inixForceCloseAppCall
     Push "H0:preInit version=${VERSION}"
     Call inixWriteDebugLog
   !macroend
@@ -228,8 +246,15 @@ ShowUninstDetails show
   DetailPrint "${PRODUCT_NAME} ${VERSION} installed successfully."
 !macroend
 
+!macro customUnInit
+  SetDetailsPrint both
+  DetailPrint "Preparing to remove ${PRODUCT_NAME}..."
+  !insertmacro inixForceCloseAppCall
+!macroend
+
 !macro customUnInstall
   SetDetailsPrint both
+  !insertmacro inixForceCloseAppCall
   DetailPrint "Removing ${PRODUCT_NAME} shortcuts..."
   DetailPrint "Removing program files..."
   ; During in-place updates, files are moved here first — delete the staged copy.
