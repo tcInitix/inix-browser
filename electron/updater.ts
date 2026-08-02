@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from "electron";
+import { app } from "electron";
 import { autoUpdater } from "electron-updater";
 import type { BrowserWindow as BrowserWindowType } from "electron";
 import {
@@ -138,14 +138,7 @@ export function installUpdate(): void {
   quittingForUpdate = true;
   beforeInstallHook?.();
 
-  // Close windows cleanly so BrowserViews and renderer processes can exit.
-  for (const win of BrowserWindow.getAllWindows()) {
-    if (win.isDestroyed()) continue;
-    win.removeAllListeners("close");
-    win.close();
-  }
-
-  // quitAndInstall quits the app and launches the NSIS installer on exit.
-  // Do not destroy windows or delay — that leaves the main process alive while NSIS runs.
+  // Let quitAndInstall register the installer spawn, then quit via app.quit().
+  // Closing windows first fires window-all-closed → app.quit() without the installer.
   autoUpdater.quitAndInstall(false, true);
 }

@@ -24,7 +24,8 @@ interface UpdatePromptProps {
 function safeNotes(notes: string | undefined, version: string): string | undefined {
   if (!notes?.trim()) return undefined;
   if (isTechnicalUpdateDump(notes)) return undefined;
-  return prepareReleaseNotes(notes.trim(), version);
+  const prepared = prepareReleaseNotes(notes.trim(), version);
+  return prepared || undefined;
 }
 
 export function UpdatePrompt({ state, onDownload, onInstall, onDismiss }: UpdatePromptProps) {

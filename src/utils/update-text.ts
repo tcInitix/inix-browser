@@ -40,10 +40,54 @@ export function friendlyUpdateError(message: string): string {
 }
 
 /** Drop duplicate title lines already shown in the update dialog header. */
+const FILLER_NOTE_LINES =
+  /^Note:\s*No new features have been added to this release\.?\s*$/i;
+
+/** Remove markdown section headings that have no body content. */
+function stripEmptyMarkdownSections(notes: string): string {
+  const lines = notes.split("\n");
+  const out: string[] = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const heading = lines[i].match(/^(#{1,3})\s+(.+)$/);
+    if (!heading) {
+      const trimmed = lines[i].trim();
+      if (trimmed && !FILLER_NOTE_LINES.test(trimmed)) out.push(lines[i]);
+      i++;
+      continue;
+    }
+
+    const level = heading[1].length;
+    const headingLine = lines[i];
+    i++;
+    const bodyStart = i;
+    while (i < lines.length) {
+      const next = lines[i].match(/^(#{1,3})\s+/);
+      if (next && next[1].length <= level) break;
+      i++;
+    }
+
+    const body = lines.slice(bodyStart, i);
+    const hasContent = body.some((line) => {
+      const t = line.trim();
+      return t.length > 0 && !FILLER_NOTE_LINES.test(t);
+    });
+
+    if (hasContent) {
+      out.push(headingLine, ...body);
+    }
+  }
+
+  return out.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
 export function prepareReleaseNotes(notes: string, version: string): string {
   const escaped = version.replace(/\./g, "\\.");
-  return notes
+  const withoutTitle = notes
     .replace(new RegExp(`^#\\s*Inix\\s*v?${escaped}\\s*\\n+`, "i"), "")
     .replace(/^#\s+.+\n+/i, "")
     .trim();
+
+  return stripEmptyMarkdownSections(withoutTitle);
 }

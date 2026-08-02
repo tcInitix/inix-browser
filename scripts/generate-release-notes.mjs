@@ -279,14 +279,13 @@ _One sentence tagline summarizing this update since ${sinceLabel}._
 ## What's new
 ## Improvements
 ## Fixes
-## Notes
 
 Rules:
 - Only describe changes supported by the git data above
 - Do not repeat or mention v${ctx.previousVersion ?? "the previous release"} features unless they were improved in this diff
 - Group related changes; do not list every file
 - Mention shortcuts and settings paths when relevant (e.g. Settings → Tabs)
-- Omit empty sections entirely
+- Omit empty sections entirely — do not include a ## Notes section unless you have real content for it
 - Keep under ~400 words
 - Do not invent features or shortcuts
 - Output ONLY the release notes markdown — never paste commits, diffs, file lists, or any git data back into your response`;
@@ -307,7 +306,44 @@ function cleanModelOutput(text) {
     const idx = out.indexOf(marker);
     if (idx > 0) out = out.slice(0, idx).trim();
   }
-  return out;
+  return stripEmptyMarkdownSections(out);
+}
+
+function stripEmptyMarkdownSections(notes) {
+  const filler = /^Note:\s*No new features have been added to this release\.?\s*$/i;
+  const lines = notes.split("\n");
+  const out = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const heading = lines[i].match(/^(#{1,3})\s+(.+)$/);
+    if (!heading) {
+      const trimmed = lines[i].trim();
+      if (trimmed && !filler.test(trimmed)) out.push(lines[i]);
+      i++;
+      continue;
+    }
+
+    const level = heading[1].length;
+    const headingLine = lines[i];
+    i++;
+    const bodyStart = i;
+    while (i < lines.length) {
+      const next = lines[i].match(/^(#{1,3})\s+/);
+      if (next && next[1].length <= level) break;
+      i++;
+    }
+
+    const body = lines.slice(bodyStart, i);
+    const hasContent = body.some((line) => {
+      const t = line.trim();
+      return t.length > 0 && !filler.test(t);
+    });
+
+    if (hasContent) out.push(headingLine, ...body);
+  }
+
+  return out.join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
 async function ensureOllama(host, model) {
