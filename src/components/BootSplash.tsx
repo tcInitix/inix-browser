@@ -8,9 +8,10 @@ interface BootSplashProps {
   ready: boolean;
   onFinish: () => void;
   statusText?: string;
+  waitingForUpdate?: boolean;
 }
 
-export function BootSplash({ ready, onFinish, statusText }: BootSplashProps) {
+export function BootSplash({ ready, onFinish, statusText, waitingForUpdate }: BootSplashProps) {
   const [phase, setPhase] = useState<"enter" | "hold" | "exit">("enter");
   const mountTime = useRef(Date.now());
   const finished = useRef(false);
@@ -39,7 +40,12 @@ export function BootSplash({ ready, onFinish, statusText }: BootSplashProps) {
   }, [ready, onFinish]);
 
   return (
-    <div className={`boot-splash boot-splash-${phase}`} role="status" aria-live="polite" aria-label="Inix is starting">
+    <div
+      className={`boot-splash boot-splash-${phase}${waitingForUpdate ? " boot-splash-waiting-update" : ""}`}
+      role="status"
+      aria-live="polite"
+      aria-label="Inix is starting"
+    >
       <div className="boot-splash-ambient" aria-hidden />
       <div className="boot-splash-grid" aria-hidden />
 

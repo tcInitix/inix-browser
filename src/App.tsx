@@ -1038,9 +1038,10 @@ export default function App() {
         <BootSplash
           ready={sessionReady && !!activeTab && updateCheckDone && !bootBlockedByUpdate}
           statusText={bootStatus}
+          waitingForUpdate={bootBlockedByUpdate}
           onFinish={() => setBootDone(true)}
         />
-        {updatePrompt}
+        <div className="boot-update-layer">{updatePrompt}</div>
       </>
     );
   }
