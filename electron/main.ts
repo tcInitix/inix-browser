@@ -46,6 +46,7 @@ import {
 import { registerRelayHandlers } from "./proxy/handlers";
 import { initRelayOnStartup } from "./proxy/manager";
 import { registerGoogleAuthHandlers } from "./auth/handlers";
+import { refreshCustomBlocklist } from "./privacy/blocker";
 
 declare global {
   // eslint-disable-next-line no-var
@@ -287,6 +288,7 @@ async function bootstrap() {
   if (!global.__inixMainBootstrapped) {
     global.__inixMainBootstrapped = true;
     await initDatabase();
+    refreshCustomBlocklist();
     initFtsAvailability();
     sessionManager.init();
     setupBrowsingSession();

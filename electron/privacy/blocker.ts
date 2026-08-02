@@ -236,7 +236,6 @@ export function refreshCustomBlocklist() {
       .filter((s) => s && !s.startsWith("#")),
   );
 }
-refreshCustomBlocklist();
 
 // Track blocked-request counter for the status bar / debugging
 let blockedCount = 0;
