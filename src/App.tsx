@@ -1041,7 +1041,7 @@ export default function App() {
         label: "Vault settings",
         category: "Settings",
         keywords: "password encrypt",
-        run: () => openSettings("vault"),
+        run: () => openSettings("passwords"),
       },
       {
         id: "library",

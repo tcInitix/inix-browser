@@ -1,21 +1,29 @@
-# Smoother Updates and Better Performance
-We've made significant improvements to the update experience, including better handling of silent errors and more detailed feedback.
+# Inix v0.1.47
+
+Our latest update includes several improvements and bug fixes.
+
+## What's new
+
+*   Improved error handling for importing CSV passwords
+*   Vault unlock feedback for the first time
+*   Enhanced error messages to provide better feedback and a smoother browsing experience
+*   New features in the AI-powered search bar, including improved performance and more detailed search results
+*   Changes to the theme system, including new fonts and colors
 
 ## Improvements
 
-### Installer Assets Generation
-Our installer now checks if an icon exists and generates one if necessary, ensuring a smoother installation process.
+*   Smoother updates and better performance, including better handling of silent errors and more detailed feedback
+*   Improved accessibility for users with screen readers, making Inix more inclusive
+*   New shortcut commands have been added, including:
+    *   Ctrl+D to bookmark the current page
+    *   Ctrl+1..8 to jump between open tabs
+    *   Ctrl+Shift+Delete to clear browsing data
+*   Settings paths have been updated for easier navigation:
 
-### New Icon
-A new PNG icon has been added to our application and is now displayed by default.
-
-### Autofill Profiles
-Autofill profiles are created with their respective settings (e.g., Settings → Tabs), providing a better user experience.
-
-### Improved Accessibility
-We've improved accessibility for users with screen readers, making Inix more inclusive than ever.
-
-### Enhanced Error Messages
-Our error messages have been enhanced to provide better feedback and a smoother browsing experience.
+    *   Settings → Tabs: Tab layout: horizontal / vertical toggle
+    *   Settings → Appearance: New theme options
 
 ## Fixes
+
+*   Resolved issues with the panic mode, including improved UI and performance
+*   Fixed problems with password generation and import, ensuring more secure browsing experiences

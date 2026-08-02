@@ -146,7 +146,6 @@ export function ScreenshotModal({ open, dataUrl, onClose }: ScreenshotModalProps
     try {
       const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, "image/png"));
       if (blob) {
-        // @ts-expect-error ClipboardItem typing
         await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
       }
     } catch {
