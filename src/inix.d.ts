@@ -486,6 +486,13 @@ export interface InixAPI {
     pickChromeBookmarks: () => Promise<ImportResult>;
     chromePasswords: (profileDir?: string) => Promise<ImportResult>;
     pickChromePasswordsCsv: () => Promise<ImportResult>;
+    onPasswordProgress: (
+      callback: (progress: {
+        phase: "reading" | "decrypting" | "saving";
+        current: number;
+        total: number;
+      }) => void
+    ) => () => void;
   };
   relay: {
     getStatus: () => Promise<RelayState>;
@@ -509,6 +516,9 @@ export interface ImportResult {
   skipped?: number;
   failed?: number;
   parsed?: number;
+  decrypted?: number;
+  undecryptable?: number;
+  appBound?: number;
 }
 
 declare global {

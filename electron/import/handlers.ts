@@ -3,11 +3,16 @@ import { importChromeBookmarksFromFile, importChromeBookmarksFromProfile } from 
 import {
   importChromePasswordsFromProfile,
   importPasswordsFromCsvFile,
+  type ImportPasswordProgress,
 } from "./chrome-passwords";
 import { getChromeUserDataDir, listChromeProfiles } from "./chrome-paths";
 
 function windowFromEvent(event: IpcMainInvokeEvent): BrowserWindow | null {
   return BrowserWindow.fromWebContents(event.sender);
+}
+
+function sendImportProgress(event: IpcMainInvokeEvent, progress: ImportPasswordProgress): void {
+  windowFromEvent(event)?.webContents.send("import:password-progress", progress);
 }
 
 export function registerImportHandlers(): void {
@@ -55,13 +60,15 @@ export function registerImportHandlers(): void {
     }
   });
 
-  ipcMain.handle("import:chrome-passwords", async (_e, profileDir?: string) => {
+  ipcMain.handle("import:chrome-passwords", async (e, profileDir?: string) => {
     try {
       const dir = profileDir ?? listChromeProfiles()[0]?.dir;
       if (!dir) {
         return { ok: false, error: "Chrome not found on this device." };
       }
-      const result = await importChromePasswordsFromProfile(dir);
+      const result = await importChromePasswordsFromProfile(dir, (progress) =>
+        sendImportProgress(e, progress)
+      );
       return { ok: true, ...result };
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) };
@@ -85,7 +92,9 @@ export function registerImportHandlers(): void {
       return { ok: false, canceled: true };
     }
     try {
-      const imported = await importPasswordsFromCsvFile(result.filePaths[0]);
+      const imported = await importPasswordsFromCsvFile(result.filePaths[0], (progress) =>
+        sendImportProgress(e, progress)
+      );
       return { ok: true, ...imported };
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) };

@@ -7,9 +7,10 @@ const EXIT_MS = 520;
 interface BootSplashProps {
   ready: boolean;
   onFinish: () => void;
+  statusText?: string;
 }
 
-export function BootSplash({ ready, onFinish }: BootSplashProps) {
+export function BootSplash({ ready, onFinish, statusText }: BootSplashProps) {
   const [phase, setPhase] = useState<"enter" | "hold" | "exit">("enter");
   const mountTime = useRef(Date.now());
   const finished = useRef(false);
@@ -58,7 +59,7 @@ export function BootSplash({ ready, onFinish }: BootSplashProps) {
         <div className="boot-splash-progress" aria-hidden>
           <div className="boot-splash-progress-bar" />
         </div>
-        <p className="boot-splash-status">{ready ? "Almost ready" : "Starting up"}</p>
+        <p className="boot-splash-status">{statusText ?? (ready ? "Almost ready" : "Starting up")}</p>
       </div>
     </div>
   );

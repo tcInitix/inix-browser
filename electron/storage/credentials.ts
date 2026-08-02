@@ -4,7 +4,7 @@ import {
   decryptVaultPayload,
   hasVaultKey,
 } from "./vault-crypto";
-import { isVaultUnlocked } from "./vault";
+import { isVaultUnlocked, touchVaultActivity } from "./vault";
 
 export interface StoredCredential {
   id: number;
@@ -22,44 +22,78 @@ interface CredentialPayload {
   title: string;
 }
 
+export interface CredentialImportItem {
+  origin: string;
+  username: string;
+  password: string;
+  title: string;
+}
+
+export interface CredentialImportResult {
+  imported: number;
+  updated: number;
+  skipped: number;
+  failed: number;
+}
+
 function requireUnlocked(): void {
   if (!isVaultUnlocked() || !hasVaultKey()) {
     throw new Error("Vault locked");
   }
 }
 
+function credentialKey(origin: string, username: string): string {
+  return `${origin}\x00${username}`;
+}
+
 export function listCredentials(): StoredCredential[] {
-  if (!isVaultUnlocked()) return [];
   const rows = runQuery<{
     id: number;
     origin: string;
     username_hint: string;
+    title: string;
     payload: string;
     created_at: number;
     updated_at: number;
-  }>("SELECT id, origin, username_hint, payload, created_at, updated_at FROM vault_credentials ORDER BY updated_at DESC");
+  }>(
+    "SELECT id, origin, username_hint, title, payload, created_at, updated_at FROM vault_credentials ORDER BY updated_at DESC"
+  );
 
+  const unlocked = isVaultUnlocked() && hasVaultKey();
   const out: StoredCredential[] = [];
+
   for (const row of rows) {
-    try {
-      const data = decryptVaultPayload<CredentialPayload>(row.payload);
-      out.push({
-        id: row.id,
-        origin: row.origin,
-        username: data.username,
-        title: data.title,
-        created_at: row.created_at,
-        updated_at: row.updated_at,
-      });
-    } catch {
-      // skip corrupt
+    if (unlocked) {
+      try {
+        const data = decryptVaultPayload<CredentialPayload>(row.payload);
+        out.push({
+          id: row.id,
+          origin: row.origin,
+          username: data.username,
+          title: data.title || row.title,
+          created_at: row.created_at,
+          updated_at: row.updated_at,
+        });
+        continue;
+      } catch {
+        // Fall back to stored hints if payload cannot be decrypted.
+      }
     }
+
+    out.push({
+      id: row.id,
+      origin: row.origin,
+      username: row.username_hint,
+      title: row.title,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+    });
   }
+
   return out;
 }
 
 export function credentialsForOrigin(origin: string): Array<{ id: number; username: string }> {
-  if (!isVaultUnlocked()) return [];
   const rows = runQuery<{ id: number; username_hint: string }>(
     "SELECT id, username_hint FROM vault_credentials WHERE origin = ? ORDER BY updated_at DESC",
     [origin]
@@ -99,6 +133,7 @@ export function saveCredential(
   options?: { persist?: boolean }
 ): number {
   requireUnlocked();
+  touchVaultActivity();
   const now = Date.now();
   const payload = encryptVaultPayload({ username, password, origin, title });
   const persist = options?.persist !== false;
@@ -124,6 +159,72 @@ export function saveCredential(
   const id = lastInsertId();
   if (persist) saveDatabase();
   return id;
+}
+
+export function saveCredentialsBatch(
+  items: CredentialImportItem[],
+  options?: {
+    persist?: boolean;
+    onProgress?: (current: number, total: number) => void;
+  }
+): CredentialImportResult {
+  requireUnlocked();
+
+  const persist = options?.persist !== false;
+  const now = Date.now();
+  const existingRows = runQuery<{ id: number; origin: string; username_hint: string }>(
+    "SELECT id, origin, username_hint FROM vault_credentials"
+  );
+  const existingIds = new Map(
+    existingRows.map((row) => [credentialKey(row.origin, row.username_hint), row.id])
+  );
+
+  let imported = 0;
+  let updated = 0;
+  let skipped = 0;
+  let failed = 0;
+
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    touchVaultActivity();
+    options?.onProgress?.(i + 1, items.length);
+
+    if (!item.origin || !item.username) {
+      skipped++;
+      continue;
+    }
+
+    try {
+      const payload = encryptVaultPayload({
+        username: item.username,
+        password: item.password,
+        origin: item.origin,
+        title: item.title,
+      });
+      const key = credentialKey(item.origin, item.username);
+      const existingId = existingIds.get(key);
+
+      if (existingId != null) {
+        runExec(
+          "UPDATE vault_credentials SET payload = ?, title = ?, updated_at = ? WHERE id = ?",
+          [payload, item.title, now, existingId]
+        );
+        updated++;
+      } else {
+        runExec(
+          "INSERT INTO vault_credentials (origin, username_hint, title, payload, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+          [item.origin, item.username, item.title, payload, now, now]
+        );
+        existingIds.set(key, lastInsertId());
+        imported++;
+      }
+    } catch {
+      failed++;
+    }
+  }
+
+  if (persist) saveDatabase();
+  return { imported, updated, skipped, failed };
 }
 
 export function removeCredential(id: number): void {

@@ -1,14 +1,21 @@
-# Inix v0.1.39
-**Improved Installer Assets Generation**
+# Inix v0.1.40
+_Async Password Import Improvements_
 
-A new icon has been added to our application and is now displayed by default. The installer assets generation script now checks if an icon exists and generates one if necessary, ensuring a smoother installation process.
+## What's new
 
-### Improvements
-No changes were made to improve performance or functionality in this release.
+### Improved Installer Assets Generation
+Our installer now checks if an icon exists and generates one if necessary, ensuring a smoother installation process.
 
-### Fixes
-The installer assets generation script has been improved. When generating icons using `png-to-ico`, standard Windows icon sizes are now supported, providing a better visual experience.
-Additionally, the scaling factor for logos has been adjusted to provide a more consistent visual experience throughout the application.
+### New Icon
+A new PNG icon has been added to our application and is now displayed by default.
 
-No changes were made to improve performance or functionality in this release.
-A new PNG icon is now displayed in the application, providing a more visually appealing user interface.
+## Improvements
+
+*   The vault unlock feature now displays a message when unlocking the vault for the first time.
+*   Auto-fill profiles are created with their respective settings (e.g., Settings → Tabs).
+*   The Autofill Add button is no longer hidden in the Chrome passwords import dialog.
+
+## Fixes
+
+*   Improved error handling during password import from CSV files.
+*   Fixed an issue where importing passwords from a profile would sometimes fail to save the credentials.

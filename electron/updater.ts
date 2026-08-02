@@ -95,10 +95,6 @@ export function initAutoUpdater(windowGetter: () => BrowserWindowType | null): v
     console.warn("[updater]", err.message.slice(0, 200));
   });
 
-  setTimeout(() => {
-    void autoUpdater.checkForUpdates().catch(() => {});
-  }, 12_000);
-
   setInterval(() => {
     void autoUpdater.checkForUpdates().catch(() => {});
   }, 4 * 60 * 60 * 1000);

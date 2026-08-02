@@ -123,11 +123,26 @@ function formatImportResult(label: string, result: ImportResult): string {
   if (result.skipped) parts.push(`${result.skipped} skipped`);
   if (result.failed) parts.push(`${result.failed} failed`);
   if (parts.length) {
-    const fromFile = result.parsed != null ? ` (${result.parsed} found in file)` : "";
-    return `${label}: ${parts.join(", ")}${fromFile}.`;
+    const meta: string[] = [];
+    if (result.parsed != null) meta.push(`${result.parsed} in Chrome`);
+    if (result.decrypted != null && result.decrypted !== result.parsed) {
+      meta.push(`${result.decrypted} decrypted`);
+    }
+    const fromFile = meta.length ? ` (${meta.join(", ")})` : "";
+    let message = `${label}: ${parts.join(", ")}${fromFile}.`;
+    if (result.appBound) {
+      message +=
+        " Some passwords use Chrome app-bound encryption and could not be read — export passwords as CSV from Chrome instead.";
+    } else if (result.undecryptable) {
+      message += ` ${result.undecryptable} could not be decrypted.`;
+    }
+    return message;
   }
   if (result.parsed) {
-    return `${label}: all ${result.parsed} bookmarks were already in your library.`;
+    if (result.appBound && result.parsed === result.undecryptable) {
+      return `${label}: Chrome blocked direct import for ${result.parsed} password(s). Use Chrome → Password Manager → Export to CSV, then import the CSV here.`;
+    }
+    return `${label}: all ${result.parsed} entries were skipped or could not be imported.`;
   }
   return `${label}: nothing new to import.`;
 }
@@ -235,6 +250,7 @@ export function SettingsPage({
   const [importMessage, setImportMessage] = useState<string | null>(null);
   const [importingBookmarks, setImportingBookmarks] = useState(false);
   const [importingPasswords, setImportingPasswords] = useState(false);
+  const [importProgress, setImportProgress] = useState<string | null>(null);
   const [standard, setStandard] = useState<StandardSettingsState>(defaultStandardSettings);
   const [defaultDownloadPath, setDefaultDownloadPath] = useState("");
 
@@ -332,9 +348,7 @@ export function SettingsPage({
     const [configured, unlocked, creds] = await Promise.all([
       window.inix?.vault.isConfigured(),
       window.inix?.vault.isUnlocked(),
-      window.inix?.vault.isUnlocked().then((isUnlocked) =>
-        isUnlocked ? window.inix?.credentials.list() : []
-      ),
+      window.inix?.credentials.list(),
     ]);
     if (configured != null) setVaultConfigured(configured);
     setVaultUnlocked(!!unlocked);
@@ -441,6 +455,18 @@ export function SettingsPage({
     }
 
     setImportingPasswords(true);
+    setImportProgress(null);
+    const unsubProgress = window.inix?.import.onPasswordProgress((progress) => {
+      const pct =
+        progress.total > 0 ? Math.round((progress.current / progress.total) * 100) : 0;
+      const phaseLabel =
+        progress.phase === "reading"
+          ? "Reading Chrome data"
+          : progress.phase === "decrypting"
+            ? "Decrypting passwords"
+            : "Saving to vault";
+      setImportProgress(`${phaseLabel}… ${pct}%`);
+    });
     try {
       const result = pickCsv
         ? await window.inix?.import.pickChromePasswordsCsv()
@@ -449,6 +475,8 @@ export function SettingsPage({
       setImportMessage(formatImportResult("Passwords", result));
       await refreshVaultData();
     } finally {
+      unsubProgress?.();
+      setImportProgress(null);
       setImportingPasswords(false);
     }
   };
@@ -526,6 +554,7 @@ export function SettingsPage({
           Choose password CSV…
         </button>
       </div>
+      {importProgress && <p className="settings-note">{importProgress}</p>}
       <p className="settings-note">
         Passwords import directly from Chrome on Windows, or from a CSV export (Chrome → Password
         Manager → Export). Unlock the vault first.
@@ -1364,6 +1393,20 @@ export function SettingsPage({
                   </div>
                   {chromePasswordImportBlock}
                   {importMessage && <p className="settings-callout">{importMessage}</p>}
+                  {!vaultUnlocked && (
+                    <>
+                      <p className="settings-note">
+                        Unlock the vault to use saved passwords for autofill.
+                      </p>
+                      <button
+                        type="button"
+                        className="settings-primary-btn"
+                        onClick={() => setVaultUnlockOpen(true)}
+                      >
+                        Unlock vault
+                      </button>
+                    </>
+                  )}
                   {savedCredentials.length === 0 ? (
                     <p className="settings-note">No saved passwords yet.</p>
                   ) : (

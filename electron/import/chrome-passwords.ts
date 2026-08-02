@@ -3,7 +3,7 @@ import fs from "node:fs";
 import type { SqlValue } from "sql.js";
 import os from "node:os";
 import path from "node:path";
-import { saveCredential, credentialExists } from "../storage/credentials";
+import { saveCredentialsBatch, type CredentialImportItem } from "../storage/credentials";
 import { saveDatabase } from "../storage/db";
 import { isVaultUnlocked } from "../storage/vault";
 import { dpapiUnprotect, isDpapiAvailable } from "./dpapi";
@@ -15,13 +15,31 @@ export interface ImportPasswordsResult {
   updated: number;
   skipped: number;
   failed: number;
+  parsed?: number;
+  decrypted?: number;
+  undecryptable?: number;
+  appBound?: number;
+}
+
+export type ImportPasswordProgress = {
+  phase: "reading" | "decrypting" | "saving";
+  current: number;
+  total: number;
+};
+
+const YIELD_EVERY = 15;
+
+function yieldToEventLoop(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve));
 }
 
 function urlToOrigin(url: string): string {
+  const trimmed = url.trim();
+  if (!trimmed) return "";
   try {
-    return new URL(url).origin;
+    return new URL(trimmed).origin;
   } catch {
-    return url;
+    return trimmed;
   }
 }
 
@@ -46,31 +64,40 @@ function toBuffer(value: unknown): Buffer {
   return Buffer.alloc(0);
 }
 
-function decryptChromePassword(encrypted: Buffer, aesKey: Buffer | null): string | null {
-  if (encrypted.length === 0) return "";
+function decryptChromePassword(
+  encrypted: Buffer,
+  aesKey: Buffer | null
+): { password: string | null; appBound?: boolean } {
+  if (encrypted.length === 0) return { password: "" };
 
   const prefix = encrypted.slice(0, 3).toString("utf8");
+  if (prefix === "v20") {
+    return { password: null, appBound: true };
+  }
+
   if (prefix === "v10" || prefix === "v11") {
-    if (!aesKey) return null;
+    if (!aesKey) return { password: null };
     const nonce = encrypted.slice(3, 15);
     const payload = encrypted.slice(15);
-    if (payload.length < 16) return null;
+    if (payload.length < 16) return { password: null };
     const tag = payload.slice(-16);
     const ciphertext = payload.slice(0, -16);
     try {
       const decipher = crypto.createDecipheriv("aes-256-gcm", aesKey, nonce);
       decipher.setAuthTag(tag);
-      return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString("utf8");
+      return {
+        password: Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString("utf8"),
+      };
     } catch {
-      return null;
+      return { password: null };
     }
   }
 
-  if (!isDpapiAvailable()) return null;
+  if (!isDpapiAvailable()) return { password: null };
   try {
-    return dpapiUnprotect(encrypted).toString("utf8");
+    return { password: dpapiUnprotect(encrypted).toString("utf8") };
   } catch {
-    return null;
+    return { password: null };
   }
 }
 
@@ -89,56 +116,33 @@ function copyForRead(src: string): { path: string; cleanup: () => void } {
   };
 }
 
-const IMPORT_YIELD_EVERY = 50;
-
-function yieldToEventLoop(): Promise<void> {
-  return new Promise((resolve) => setImmediate(resolve));
-}
-
 async function importPasswordRows(
-  rows: Array<{ url: string; username: string; password: string; title: string }>
-): Promise<ImportPasswordsResult> {
+  rows: CredentialImportItem[],
+  onProgress?: (progress: ImportPasswordProgress) => void
+): Promise<Omit<ImportPasswordsResult, "parsed" | "decrypted" | "undecryptable" | "appBound">> {
   if (!isVaultUnlocked()) {
     throw new Error("Unlock the vault before importing passwords.");
   }
 
-  let imported = 0;
-  let updated = 0;
-  let skipped = 0;
-  let failed = 0;
+  onProgress?.({ phase: "saving", current: 0, total: rows.length });
+  await yieldToEventLoop();
 
-  for (let i = 0; i < rows.length; i++) {
-    const row = rows[i];
-    const origin = urlToOrigin(row.url);
-    const username = row.username.trim();
-    const password = row.password;
-    const title = row.title.trim() || origin;
+  const result = saveCredentialsBatch(rows, {
+    persist: false,
+    onProgress: (current, total) => {
+      onProgress?.({ phase: "saving", current, total });
+    },
+  });
 
-    if (!origin || !username || !password) {
-      skipped++;
-      continue;
-    }
-
-    try {
-      const existed = credentialExists(origin, username);
-      saveCredential(origin, username, password, title, { persist: false });
-      if (existed) updated++;
-      else imported++;
-    } catch {
-      failed++;
-    }
-
-    if (i > 0 && i % IMPORT_YIELD_EVERY === 0) {
-      await yieldToEventLoop();
-    }
-  }
-
+  await yieldToEventLoop();
   saveDatabase();
-  return { imported, updated, skipped, failed };
+
+  return result;
 }
 
 export async function importChromePasswordsFromProfile(
-  profileDir: string
+  profileDir: string,
+  onProgress?: (progress: ImportPasswordProgress) => void
 ): Promise<ImportPasswordsResult> {
   if (!isDpapiAvailable()) {
     throw new Error(
@@ -158,6 +162,9 @@ export async function importChromePasswordsFromProfile(
   const copy = copyForRead(loginData);
 
   try {
+    onProgress?.({ phase: "reading", current: 0, total: 1 });
+    await yieldToEventLoop();
+
     const logins = await queryExternalSqlite<{
       origin_url: string;
       username_value: string;
@@ -167,24 +174,44 @@ export async function importChromePasswordsFromProfile(
       "SELECT origin_url, username_value, password_value FROM logins WHERE blacklisted_by_user = 0"
     );
 
-    const rows: Array<{ url: string; username: string; password: string; title: string }> = [];
+    const parsed = logins.length;
+    const rows: CredentialImportItem[] = [];
+    let undecryptable = 0;
+    let appBound = 0;
+
+    onProgress?.({ phase: "decrypting", current: 0, total: parsed });
     for (let i = 0; i < logins.length; i++) {
       const login = logins[i];
       const encrypted = toBuffer(login.password_value);
-      const password = decryptChromePassword(encrypted, aesKey);
-      if (password == null) continue;
-      rows.push({
-        url: String(login.origin_url ?? ""),
-        username: String(login.username_value ?? ""),
-        password,
-        title: String(login.origin_url ?? ""),
-      });
-      if (i > 0 && i % IMPORT_YIELD_EVERY === 0) {
+      const decrypted = decryptChromePassword(encrypted, aesKey);
+      if (decrypted.password == null) {
+        undecryptable++;
+        if (decrypted.appBound) appBound++;
+      } else {
+        const url = String(login.origin_url ?? "");
+        const origin = urlToOrigin(url);
+        rows.push({
+          origin,
+          username: String(login.username_value ?? "").trim(),
+          password: decrypted.password,
+          title: url.trim() || origin,
+        });
+      }
+
+      if (i > 0 && i % YIELD_EVERY === 0) {
+        onProgress?.({ phase: "decrypting", current: i, total: parsed });
         await yieldToEventLoop();
       }
     }
 
-    return await importPasswordRows(rows);
+    const saved = await importPasswordRows(rows, onProgress);
+    return {
+      ...saved,
+      parsed,
+      decrypted: rows.length,
+      undecryptable,
+      appBound,
+    };
   } finally {
     copy.cleanup();
   }
@@ -219,7 +246,10 @@ function parseCsvLine(line: string): string[] {
   return out;
 }
 
-export async function importPasswordsFromCsvText(text: string): Promise<ImportPasswordsResult> {
+export async function importPasswordsFromCsvText(
+  text: string,
+  onProgress?: (progress: ImportPasswordProgress) => void
+): Promise<ImportPasswordsResult> {
   const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/).filter((l) => l.trim());
   if (lines.length < 2) {
     throw new Error("CSV file is empty or missing data rows.");
@@ -235,21 +265,30 @@ export async function importPasswordsFromCsvText(text: string): Promise<ImportPa
     throw new Error('CSV must include "url", "username", and "password" columns (Chrome export format).');
   }
 
-  const rows: Array<{ url: string; username: string; password: string; title: string }> = [];
+  const rows: CredentialImportItem[] = [];
   for (let i = 1; i < lines.length; i++) {
     const cols = parseCsvLine(lines[i]);
+    const url = cols[urlIdx] ?? "";
     rows.push({
       title: nameIdx >= 0 ? cols[nameIdx] ?? "" : "",
-      url: cols[urlIdx] ?? "",
-      username: cols[userIdx] ?? "",
+      origin: urlToOrigin(url),
+      username: (cols[userIdx] ?? "").trim(),
       password: cols[passIdx] ?? "",
     });
   }
 
-  return await importPasswordRows(rows);
+  const saved = await importPasswordRows(rows, onProgress);
+  return {
+    ...saved,
+    parsed: rows.length,
+    decrypted: rows.length,
+  };
 }
 
-export async function importPasswordsFromCsvFile(filePath: string): Promise<ImportPasswordsResult> {
+export async function importPasswordsFromCsvFile(
+  filePath: string,
+  onProgress?: (progress: ImportPasswordProgress) => void
+): Promise<ImportPasswordsResult> {
   const text = fs.readFileSync(filePath, "utf8");
-  return await importPasswordsFromCsvText(text);
+  return importPasswordsFromCsvText(text, onProgress);
 }

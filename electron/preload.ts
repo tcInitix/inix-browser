@@ -426,6 +426,16 @@ contextBridge.exposeInMainWorld("inix", {
     chromePasswords: (profileDir?: string) =>
       ipcRenderer.invoke("import:chrome-passwords", profileDir),
     pickChromePasswordsCsv: () => ipcRenderer.invoke("import:pick-chrome-passwords-csv"),
+    onPasswordProgress: (
+      callback: (progress: { phase: "reading" | "decrypting" | "saving"; current: number; total: number }) => void
+    ) => {
+      const handler = (
+        _e: IpcRendererEvent,
+        progress: { phase: "reading" | "decrypting" | "saving"; current: number; total: number }
+      ) => callback(progress);
+      ipcRenderer.on("import:password-progress", handler);
+      return () => ipcRenderer.removeListener("import:password-progress", handler);
+    },
   },
   relay: {
     getStatus: () => ipcRenderer.invoke("relay:get-status") as Promise<RelayState>,

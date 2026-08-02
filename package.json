@@ -1,6 +1,6 @@
 {
   "name": "inix-browser",
-  "version": "0.1.40",
+  "version": "0.1.41",
   "description": "Inix — a fast, private browser",
   "homepage": "https://github.com/tcInitix/inix-browser",
   "main": "dist-electron/main.js",
@@ -29,6 +29,7 @@
   },
   "dependencies": {
     "@mozilla/readability": "^0.6.0",
+    "@primno/dpapi": "^2.0.1",
     "@xyflow/react": "^12.11.2",
     "electron-updater": "^6.8.9",
     "jsdom": "^30.0.1",

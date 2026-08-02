@@ -43,6 +43,11 @@ function resetIdleTimer(): void {
   idleTimer = setTimeout(() => lockVault(), IDLE_LOCK_MS);
 }
 
+/** Keep the vault unlocked during long operations (e.g. password import). */
+export function touchVaultActivity(): void {
+  if (hasVaultKey()) resetIdleTimer();
+}
+
 export function isVaultConfigured(): boolean {
   return !!getConfig();
 }

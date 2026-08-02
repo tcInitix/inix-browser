@@ -53,6 +53,8 @@ export default function App() {
   const [activeTabId, setActiveTabId] = useState("");
   const [sessionReady, setSessionReady] = useState(false);
   const [bootDone, setBootDone] = useState(false);
+  const [updateCheckDone, setUpdateCheckDone] = useState(false);
+  const [bootStatus, setBootStatus] = useState<string | undefined>(undefined);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [aiInject, setAiInject] = useState<AiInjectRequest | null>(null);
@@ -894,16 +896,30 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    let bootResolved = false;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+    const finishBootUpdateCheck = () => {
+      if (bootResolved) return;
+      bootResolved = true;
+      if (timeoutId) clearTimeout(timeoutId);
+      setUpdateCheckDone(true);
+    };
+
     const unsubs = [
-      window.inix?.update.onAvailable((info) =>
+      window.inix?.update.onAvailable((info) => {
         setUpdateState({
           status: "available",
           version: info.version,
           releaseNotes: info.releaseNotes,
-        })
-      ),
+        });
+        finishBootUpdateCheck();
+      }),
       window.inix?.update.onNotAvailable(() => {
-        // manual checks show toast from Settings
+        finishBootUpdateCheck();
+      }),
+      window.inix?.update.onError(() => {
+        finishBootUpdateCheck();
       }),
       window.inix?.update.onProgress((p) =>
         setUpdateState({ status: "downloading", percent: p.percent })
@@ -912,7 +928,24 @@ export default function App() {
         setUpdateState({ status: "ready", version: info.version })
       ),
     ];
-    return () => unsubs.forEach((u) => u?.());
+
+    void (async () => {
+      const supported = await window.inix?.update.supported();
+      if (!supported) {
+        finishBootUpdateCheck();
+        return;
+      }
+
+      setBootStatus("Checking for updates…");
+      timeoutId = setTimeout(finishBootUpdateCheck, 10_000);
+      const result = await window.inix?.update.check();
+      if (!result?.ok) finishBootUpdateCheck();
+    })();
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      unsubs.forEach((u) => u?.());
+    };
   }, []);
 
   useEffect(() => {
@@ -943,12 +976,34 @@ export default function App() {
     return () => unsub?.();
   }, []);
 
+  const updatePrompt = (
+    <UpdatePrompt
+      state={updateState}
+      onDismiss={() => setUpdateState({ status: "idle" })}
+      onDownload={async () => {
+        setUpdateState({ status: "downloading", percent: 0 });
+        const result = await window.inix?.update.download();
+        if (!result?.ok) {
+          setUpdateState({
+            status: "error",
+            message: result?.error ?? "Download failed",
+          });
+        }
+      }}
+      onInstall={() => void window.inix?.update.install()}
+    />
+  );
+
   if (!bootDone) {
     return (
-      <BootSplash
-        ready={sessionReady && !!activeTab}
-        onFinish={() => setBootDone(true)}
-      />
+      <>
+        <BootSplash
+          ready={sessionReady && !!activeTab && updateCheckDone}
+          statusText={bootStatus}
+          onFinish={() => setBootDone(true)}
+        />
+        {updatePrompt}
+      </>
     );
   }
 
@@ -1122,21 +1177,7 @@ export default function App() {
         }}
       />
 
-      <UpdatePrompt
-        state={updateState}
-        onDismiss={() => setUpdateState({ status: "idle" })}
-        onDownload={async () => {
-          setUpdateState({ status: "downloading", percent: 0 });
-          const result = await window.inix?.update.download();
-          if (!result?.ok) {
-            setUpdateState({
-              status: "error",
-              message: result?.error ?? "Download failed",
-            });
-          }
-        }}
-        onInstall={() => void window.inix?.update.install()}
-      />
+      {updatePrompt}
 
       {onboardingOpen && <OnboardingFlow onComplete={(r) => void completeOnboarding(r)} />}
 
