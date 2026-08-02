@@ -78,6 +78,23 @@ Var pid
     Pop $0
   FunctionEnd
 
+  Function inixCleanupFailedInstall
+    Push $R1
+    DetailPrint "Cleaning up leftover files from a failed previous install..."
+    ReadRegStr $R1 SHELL_CONTEXT "Software\${APP_GUID}" InstallLocation
+    StrCmp $R1 "" 0 inixCleanupHavePath
+      StrCpy $R1 "$INSTDIR"
+    inixCleanupHavePath:
+    StrCmp $R1 "" inixCleanupFailedInstallDone
+      !insertmacro inixForceCloseAppCall
+      SetOutPath $TEMP
+      ClearErrors
+      RMDir /r "$R1"
+      DetailPrint "Removed leftover install at $R1"
+    inixCleanupFailedInstallDone:
+    Pop $R1
+  FunctionEnd
+
   Function inixRetryUninstallInPlace
     Push $R1
     Push $R2
@@ -88,6 +105,8 @@ Var pid
     StrCmp $R1 "" 0 inixRetryHaveUninstall
       Push "H1:retry-skip no-uninstall-string"
       Call inixWriteDebugLog
+      Call inixCleanupFailedInstall
+      StrCpy $R0 0
       Goto inixRetryUninstallDone
     inixRetryHaveUninstall:
 
@@ -133,13 +152,20 @@ Var pid
   FunctionEnd
 
   Function inixCustomUnInstallCheck
+    Push $R0
+    Pop $R9
+
     !insertmacro inixForceCloseAppCall
-    Push "H4:uninstall-old-version-exit code=$R0"
+
+    Push "H4:uninstall-old-version-exit code=$R9"
     Call inixWriteDebugLog
-    IntCmp $R0 0 inixCustomUnInstallCheckDone
+    IntCmp $R9 0 inixCustomUnInstallCheckDone
     Call inixRetryUninstallInPlace
     Push "H4:uninstall-after-retry code=$R0"
     Call inixWriteDebugLog
+    IntCmp $R0 0 inixCustomUnInstallCheckDone
+    Call inixCleanupFailedInstall
+    StrCpy $R0 0
     inixCustomUnInstallCheckDone:
   FunctionEnd
 !endif
@@ -206,7 +232,7 @@ ShowUninstDetails show
   DetailPrint "Cleaning up files from the previous version..."
   ClearErrors
   RMDir /r "$PLUGINSDIR\old-install"
-  nsExec::ExecToLog `$SYSDIR\cmd.exe /c for /d %G in ("%TEMP%\nsm*.tmp") do @if exist "%G\old-install" rd /s /q "%G\old-install"`
+  nsExec::ExecToLog `$SYSDIR\cmd.exe /c for /d %G in ("%TEMP%\nsm*.tmp" "%TEMP%\nsa*.tmp") do @if exist "%G\old-install" rd /s /q "%G\old-install"`
   DetailPrint "${PRODUCT_NAME} ${VERSION} installed successfully."
 !macroend
 
