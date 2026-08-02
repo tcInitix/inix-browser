@@ -59,6 +59,8 @@ export interface TabUpdate {
 
   zoomLevel?: number;
 
+  audible?: boolean;
+
 }
 
 
@@ -624,6 +626,14 @@ export class TabManager {
 
   }
 
+  private emitAudibleState(tabId: string, wc: WebContents): void {
+    if (this.frozenTabs.has(tabId)) {
+      this.emit(tabId, { audible: false });
+      return;
+    }
+    this.emit(tabId, { audible: wc.isCurrentlyAudible() });
+  }
+
 
 
   private wireEvents(tabId: string, view: BrowserView) {
@@ -764,6 +774,12 @@ export class TabManager {
         void wc.executeJavaScript(getAutofillBootstrapScript()).catch(() => {});
       }
 
+      this.emitAudibleState(tabId, wc);
+
+    });
+
+    wc.on("audio-state-changed", () => {
+      this.emitAudibleState(tabId, wc);
     });
 
 
@@ -955,7 +971,7 @@ export class TabManager {
     this.destroyView(tabId);
     this.frozenTabs.add(tabId);
 
-    this.emit(tabId, { url: captured.url, title: captured.title, frozen: true, isLoading: false });
+    this.emit(tabId, { url: captured.url, title: captured.title, frozen: true, isLoading: false, audible: false });
 
     return true;
 

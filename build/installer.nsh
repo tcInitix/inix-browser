@@ -26,11 +26,11 @@ Var pid
   Function inixForceCloseApp
     DetailPrint "Closing running ${PRODUCT_NAME}..."
     !ifdef INSTALL_MODE_PER_ALL_USERS
-      nsExec::Exec `taskkill /im "${PRODUCT_FILENAME}.exe" /fi "PID ne $pid"`
+      nsExec::Exec `taskkill /im "${PRODUCT_FILENAME}.exe" /fi "PID ne $pid" /t`
     !else
-      nsExec::Exec `"$SYSDIR\cmd.exe" /c taskkill /im "${PRODUCT_FILENAME}.exe" /fi "PID ne $pid" /fi "USERNAME eq %USERNAME%"`
+      nsExec::Exec `"$SYSDIR\cmd.exe" /c taskkill /im "${PRODUCT_FILENAME}.exe" /fi "PID ne $pid" /fi "USERNAME eq %USERNAME%" /t`
     !endif
-    Sleep 300
+    Sleep 500
     StrCpy $R1 0
     inixForceCloseLoop:
       IntOp $R1 $R1 + 1
@@ -41,11 +41,11 @@ Var pid
         Pop $R0
       !endif
       IntCmp $R0 0 0 inixForceCloseDone
-        Sleep 1000
+        Sleep 800
         !ifdef INSTALL_MODE_PER_ALL_USERS
-          nsExec::Exec `taskkill /f /im "${PRODUCT_FILENAME}.exe" /fi "PID ne $pid"`
+          nsExec::Exec `taskkill /f /im "${PRODUCT_FILENAME}.exe" /fi "PID ne $pid" /t`
         !else
-          nsExec::Exec `"$SYSDIR\cmd.exe" /c taskkill /f /im "${PRODUCT_FILENAME}.exe" /fi "PID ne $pid" /fi "USERNAME eq %USERNAME%"`
+          nsExec::Exec `"$SYSDIR\cmd.exe" /c taskkill /f /im "${PRODUCT_FILENAME}.exe" /fi "PID ne $pid" /fi "USERNAME eq %USERNAME%" /t`
         !endif
         !ifdef INSTALL_MODE_PER_ALL_USERS
           ${nsProcess::FindProcess} "${PRODUCT_FILENAME}.exe" $R0
@@ -55,9 +55,9 @@ Var pid
         !endif
         IntCmp $R0 0 0 inixForceCloseDone
           DetailPrint "Waiting for ${PRODUCT_NAME} to close."
-          Sleep 2000
+          Sleep 1500
           Goto inixForceCloseLoop
-      IntCmp $R1 5 inixForceCloseDone inixForceCloseLoop inixForceCloseDone
+      IntCmp $R1 8 inixForceCloseDone inixForceCloseLoop inixForceCloseDone
     inixForceCloseDone:
   FunctionEnd
 
@@ -116,6 +116,7 @@ Var pid
   FunctionEnd
 
   Function inixCustomUnInstallCheck
+    Call inixForceCloseApp
     Push "H4:uninstall-old-version-exit code=$R0"
     Call inixWriteDebugLog
     IntCmp $R0 0 inixCustomUnInstallCheckDone
@@ -173,6 +174,7 @@ ShowUninstDetails show
   !ifndef BUILD_UNINSTALLER
     Push "H2:check-app-running start"
     Call inixWriteDebugLog
+    Call inixForceCloseApp
   !endif
   ; Use electron-builder's default close/retry logic (PID-safe, per-user aware).
   !insertmacro _CHECK_APP_RUNNING
@@ -185,6 +187,7 @@ ShowUninstDetails show
 
 !ifndef BUILD_UNINSTALLER
   !macro preInit
+    Call inixForceCloseApp
     Push "H0:preInit version=${VERSION}"
     Call inixWriteDebugLog
   !macroend

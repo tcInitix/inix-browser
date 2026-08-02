@@ -38,6 +38,8 @@ export interface Tab {
 
   securityDetail?: string;
 
+  audible?: boolean;
+
 }
 
 

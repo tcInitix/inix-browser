@@ -1,6 +1,6 @@
 {
   "name": "inix-browser",
-  "version": "0.1.13",
+  "version": "0.1.14",
   "description": "Inix — a fast, private browser",
   "homepage": "https://github.com/tcInitix/inix-browser",
   "main": "dist-electron/main.js",
@@ -67,7 +67,7 @@
       "perMachine": false,
       "allowElevation": true,
       "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
+      "createDesktopShortcut": "alwaysIfDoesNotExist",
       "createStartMenuShortcut": true,
       "shortcutName": "Inix",
       "installerSidebar": "build/installerSidebar.bmp",

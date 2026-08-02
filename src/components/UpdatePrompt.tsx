@@ -61,7 +61,6 @@ export function UpdatePrompt({ state, onDownload, onInstall, onDismiss }: Update
       <DismissibleOverlay onDismiss={onDismiss}>
         <div className="permission-prompt update-prompt update-prompt-compact">
           <header className="update-prompt-header">
-            <span className="update-prompt-badge update-prompt-badge-ready">Ready</span>
             <h3>Update ready</h3>
             <p className="update-prompt-lead">
               Inix <strong>{state.version}</strong> has been downloaded. Restart to finish installing.

@@ -80,6 +80,24 @@ export function TabBar({
             ) : (
               <span className="tab-favicon-placeholder">◆</span>
             )}
+            {tab.audible && !tab.frozen && (
+              <span className="tab-audio-icon" title="This tab is playing sound" aria-label="Playing sound">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path
+                    d="M11 5L6 9H2v6h4l5 4V5z"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinejoin="round"
+                  />
+                  <path
+                    d="M15.54 8.46a5 5 0 010 7.07M19.07 4.93a10 10 0 010 14.14"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              </span>
+            )}
             <span className="tab-title">{tab.title}</span>
             {!tab.pinned && (
               <button

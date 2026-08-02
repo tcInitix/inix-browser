@@ -3494,6 +3494,19 @@ h3,
   flex-shrink: 0;
 }
 
+.tab-audio-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--text-secondary);
+  opacity: 0.9;
+}
+
+.tab-active .tab-audio-icon {
+  color: var(--text-primary);
+}
+
 
 /* ── History panel ── */
 .history-overlay {
@@ -4184,12 +4197,6 @@ h3,
   color: var(--accent-bright);
   background: var(--accent-soft);
   border: 1px solid rgba(124, 106, 239, 0.22);
-}
-
-.update-prompt-badge-ready {
-  color: var(--success);
-  background: var(--success-soft);
-  border-color: rgba(45, 212, 191, 0.28);
 }
 
 .update-prompt-badge-error {

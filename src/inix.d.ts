@@ -151,6 +151,7 @@ export interface TabUpdate {
   zoomLevel?: number;
   securityState?: "secure" | "insecure" | "warning" | "unknown";
   securityDetail?: string;
+  audible?: boolean;
 }
 
 export interface PanicPreloadTab {
