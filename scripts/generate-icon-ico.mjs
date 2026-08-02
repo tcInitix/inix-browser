@@ -9,7 +9,7 @@ const buildDir = path.join(root, "build");
 const iconIco = path.join(buildDir, "icon.ico");
 
 if (!fs.existsSync(iconPng)) {
-  console.error(`Missing ${iconPng}`);
+  console.error(`Missing ${iconPng} — run generate-installer-assets.ps1 first`);
   process.exit(1);
 }
 
@@ -17,6 +17,7 @@ if (!fs.existsSync(buildDir)) {
   fs.mkdirSync(buildDir, { recursive: true });
 }
 
+// png-to-ico accepts a single PNG and embeds standard Windows icon sizes.
 const buf = await pngToIco(iconPng);
 fs.writeFileSync(iconIco, buf);
 fs.copyFileSync(iconIco, path.join(buildDir, "installerIcon.ico"));
