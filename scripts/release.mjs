@@ -11,6 +11,7 @@
  *   node scripts/release.mjs --no-push        # publish to GitHub only, skip git push
  *   node scripts/release.mjs --skip-notes     # skip Ollama (use existing publish.md)
  *   node scripts/release.mjs --republish      # build/publish current version (no bump)
+ *   node scripts/release.mjs --version 0.1.23   # release a specific version
  */
 
 import { execFileSync, execSync } from "node:child_process";
@@ -25,6 +26,8 @@ const ROOT = path.resolve(__dirname, "..");
 const PUBLISH_NOTES = path.join(ROOT, "release-notes", "publish.md");
 const DEFAULT_MODEL = "llama3.2:latest";
 
+const VERSION_RE = /^\d+\.\d+\.\d+(-[\w.-]+)?$/;
+
 function parseArgs(argv) {
   const opts = {
     noPush: false,
@@ -34,9 +37,11 @@ function parseArgs(argv) {
     notesOnly: false,
     republish: false,
     forceNotes: false,
+    version: "",
     model: DEFAULT_MODEL,
   };
-  for (const arg of argv) {
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
     if (arg === "--no-push") opts.noPush = true;
     else if (arg === "--no-git") opts.noGit = true;
     else if (arg === "--skip-notes") opts.skipNotes = true;
@@ -44,20 +49,28 @@ function parseArgs(argv) {
     else if (arg === "--notes-only") opts.notesOnly = true;
     else if (arg === "--republish") opts.republish = true;
     else if (arg === "--force") opts.forceNotes = true;
-    else if (arg === "--help" || arg === "-h") {
+    else if (arg === "--version" || arg === "-v") {
+      opts.version = argv[++i] ?? "";
+      if (!opts.version) throw new Error("--version requires a value, e.g. --version 0.1.23");
+    } else if (arg.startsWith("--version=")) {
+      opts.version = arg.slice("--version=".length);
+      if (!opts.version) throw new Error("--version requires a value, e.g. --version=0.1.23");
+    } else if (arg === "--help" || arg === "-h") {
       console.log(`Inix release — bump version, notes, build, GitHub publish
 
   npm run release
+  npm run release -- --version 0.1.23
 
 Options:
-  --no-push       Skip git push after publish
-  --no-git        Skip git commit and tag
-  --skip-notes    Skip Ollama; use existing release-notes/publish.md
-  --republish     Build/publish package.json version without bumping (recovery)
-  --force         Generate notes even if no git changes since last tag
-  --notes-only    Only upload notes to the current package.json version on GitHub (no build)
-  --dry-run       Preview version + notes only, no build or publish
-  -h, --help      Show this help
+  --version, -v <ver>  Release this version (instead of auto patch bump)
+  --no-push            Skip git push after publish
+  --no-git             Skip git commit and tag
+  --skip-notes         Skip Ollama; use existing release-notes/publish.md
+  --republish          Build/publish without bumping (uses --version or package.json)
+  --force              Generate notes even if no git changes since last tag
+  --notes-only         Only upload notes to the current package.json version on GitHub (no build)
+  --dry-run            Preview version + notes only, no build or publish
+  -h, --help           Show this help
 
 Requires:
   - Ollama running with llama3.2:latest (unless --skip-notes)
@@ -66,6 +79,11 @@ Requires:
       process.exit(0);
     }
   }
+
+  if (opts.version && !VERSION_RE.test(opts.version)) {
+    throw new Error(`Invalid version "${opts.version}". Use semver like 0.1.23`);
+  }
+
   return opts;
 }
 
@@ -263,13 +281,19 @@ async function main() {
   }
 
   const currentVersion = readPackageVersion();
-  const nextVersion = opts.republish ? currentVersion : bumpPatchVersion(currentVersion);
+  const nextVersion = opts.version
+    ? opts.version
+    : opts.republish
+      ? currentVersion
+      : bumpPatchVersion(currentVersion);
 
   console.log("\n=== Inix release ===");
   if (opts.republish) {
-    console.log(`Republishing v${currentVersion} (no version bump)\n`);
+    console.log(`Republishing v${nextVersion} (no version bump)\n`);
     opts.noGit = true;
     opts.skipNotes = true;
+  } else if (opts.version) {
+    console.log(`Version: v${currentVersion} → v${nextVersion} (--version)\n`);
   } else {
     console.log(`Version: v${currentVersion} → v${nextVersion}\n`);
   }
@@ -310,8 +334,12 @@ async function main() {
 
   if (!opts.republish) {
     console.log("Step 2/5 — Bump version…");
-    writePackageVersion(nextVersion);
-    console.log(`package.json → ${nextVersion}`);
+    if (currentVersion !== nextVersion) {
+      writePackageVersion(nextVersion);
+      console.log(`package.json → ${nextVersion}`);
+    } else {
+      console.log(`package.json already at ${nextVersion}`);
+    }
 
     console.log("Step 3/5 — Commit & tag…");
     try {
@@ -321,6 +349,10 @@ async function main() {
     }
   } else {
     console.log("Step 2/5 — Skipped (republish)");
+    if (opts.version && currentVersion !== nextVersion) {
+      writePackageVersion(nextVersion);
+      console.log(`package.json → ${nextVersion}`);
+    }
     console.log("Step 3/5 — Skipped (republish)");
   }
 
