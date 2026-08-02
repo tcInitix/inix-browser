@@ -117,12 +117,36 @@ function runMigrations(database: Database): void {
     transient_retention_hours: "24",
     homepage_url: "inix://newtab",
     new_tab_use_homepage: "false",
+    restore_tabs_on_launch: "true",
     private_mode_shortcut: "window",
     bookmark_bar_enabled: "false",
     panic_configured: "false",
     panic_urls: "[]",
     new_tab_quick_links:
       '[{"label":"DuckDuckGo","url":"https://duckduckgo.com"},{"label":"GitHub","url":"https://github.com"},{"label":"Reddit","url":"https://reddit.com"},{"label":"Hacker News","url":"https://news.ycombinator.com"}]',
+    startup_mode: "restore",
+    startup_urls: "[]",
+    default_search_engine: "duckduckgo",
+    custom_search_url: "",
+    theme_mode: "dark",
+    default_zoom_level: "0",
+    ui_font_scale: "medium",
+    tracker_blocking_enabled: "true",
+    https_only_mode: "false",
+    block_third_party_cookies: "false",
+    clear_cookies_on_exit: "false",
+    clear_cache_on_exit: "false",
+    offer_save_passwords: "true",
+    autofill_enabled: "true",
+    default_notifications: "ask",
+    default_geolocation: "ask",
+    default_media: "ask",
+    download_path: "",
+    prompt_for_download: "false",
+    close_window_with_last_tab: "false",
+    open_links_in_new_tab: "false",
+    new_tab_show_search: "true",
+    new_tab_show_quick_links: "true",
   };
 
   for (const [key, value] of Object.entries(defaults)) {
@@ -134,6 +158,7 @@ function runMigrations(database: Database): void {
   migrateHistoryV2(database);
   migrateTier4(database);
   migrateBookmarkBar(database);
+  migrateBookmarkBarNodes(database);
   migrateOnboarding(database);
 }
 
@@ -277,6 +302,43 @@ function migrateBookmarkBar(database: Database): void {
   if (!columnExists(database, "bookmarks", "on_bookmark_bar")) {
     database.run("ALTER TABLE bookmarks ADD COLUMN on_bookmark_bar INTEGER NOT NULL DEFAULT 0");
   }
+  saveDatabase();
+}
+
+function migrateBookmarkBarNodes(database: Database): void {
+  database.run(`
+    CREATE TABLE IF NOT EXISTS bookmark_bar_nodes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      parent_id INTEGER,
+      type TEXT NOT NULL CHECK(type IN ('folder', 'bookmark')),
+      bookmark_id INTEGER,
+      title TEXT,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL,
+      FOREIGN KEY (parent_id) REFERENCES bookmark_bar_nodes(id) ON DELETE CASCADE,
+      FOREIGN KEY (bookmark_id) REFERENCES bookmarks(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_bar_nodes_parent ON bookmark_bar_nodes(parent_id, sort_order);
+  `);
+
+  const count = database.exec("SELECT COUNT(*) AS cnt FROM bookmark_bar_nodes");
+  const existing = (count[0]?.values[0]?.[0] as number) ?? 0;
+  if (existing > 0) {
+    saveDatabase();
+    return;
+  }
+
+  const rows = database.exec(
+    "SELECT id FROM bookmarks WHERE on_bookmark_bar = 1 ORDER BY title COLLATE NOCASE ASC"
+  );
+  const barBookmarks = rows[0]?.values ?? [];
+  barBookmarks.forEach((row, index) => {
+    database.run(
+      "INSERT INTO bookmark_bar_nodes (parent_id, type, bookmark_id, title, sort_order, created_at) VALUES (NULL, 'bookmark', ?, NULL, ?, ?)",
+      [row[0] as number, index, Date.now()]
+    );
+  });
   saveDatabase();
 }
 

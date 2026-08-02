@@ -10,6 +10,19 @@ import { VaultUnlockModal } from "./VaultUnlockModal";
 import { Switch } from "./Switch";
 import { serializePanicUrls, normalizePanicUrls } from "../utils/panic";
 import { friendlyUpdateError } from "../utils/update-text";
+import type { InixSettings } from "../inix.d";
+import {
+  AppearanceSettingsSection,
+  BrowsingSettingsSection,
+  DownloadsSettingsSection,
+  GeneralSettingsSection,
+  NewTabSettingsSection,
+  PrivacySecuritySettingsSection,
+  defaultStandardSettings,
+  loadStandardSettingsFromFormatted,
+  saveStandardSettings,
+  type StandardSettingsState,
+} from "./settings/StandardSettingsSections";
 
 type AiProvider = "local" | "api";
 
@@ -21,15 +34,19 @@ const API_PRESETS = [
 ] as const;
 
 type SettingsSection =
+  | "general"
+  | "appearance"
+  | "privacy"
+  | "downloads"
   | "ai"
   | "tabs"
   | "history"
+  | "newtab"
   | "vault"
   | "autofill"
   | "profiles"
   | "library"
   | "routes"
-  | "privacy"
   | "data";
 
 interface StoredCredential {
@@ -111,23 +128,35 @@ interface SettingsPageProps {
   onNavigate: (url: string) => void;
   onAliasesChanged?: (map: Record<string, string>) => void;
   onBookmarkBarChange?: (enabled: boolean) => void;
+  onRestoreTabsChange?: (enabled: boolean) => void;
+  onSettingsApplied?: (settings: InixSettings) => void;
 }
 
 const NAV: { id: SettingsSection; label: string; icon: string }[] = [
-  { id: "ai", label: "Inix AI", icon: "✦" },
+  { id: "general", label: "General", icon: "⚙" },
+  { id: "appearance", label: "Appearance", icon: "◐" },
+  { id: "privacy", label: "Privacy & security", icon: "◈" },
+  { id: "downloads", label: "Downloads", icon: "↓" },
   { id: "tabs", label: "Tabs & memory", icon: "▣" },
   { id: "history", label: "History", icon: "◷" },
+  { id: "newtab", label: "New tab", icon: "⌂" },
   { id: "vault", label: "Vault", icon: "⛨" },
   { id: "autofill", label: "Autofill", icon: "▤" },
   { id: "profiles", label: "Profiles", icon: "◉" },
   { id: "library", label: "Library", icon: "★" },
   { id: "routes", label: "Quick routes", icon: "↗" },
-  { id: "privacy", label: "Privacy", icon: "◈" },
-  { id: "data", label: "Data", icon: "⌂" },
+  { id: "ai", label: "Inix AI", icon: "✦" },
+  { id: "data", label: "Data & import", icon: "⌂" },
 ];
 
-export function SettingsPage({ onNavigate, onAliasesChanged, onBookmarkBarChange }: SettingsPageProps) {
-  const [section, setSection] = useState<SettingsSection>("ai");
+export function SettingsPage({
+  onNavigate,
+  onAliasesChanged,
+  onBookmarkBarChange,
+  onRestoreTabsChange,
+  onSettingsApplied,
+}: SettingsPageProps) {
+  const [section, setSection] = useState<SettingsSection>("general");
   const [aiProvider, setAiProvider] = useState<AiProvider>("local");
   const [host, setHost] = useState("http://127.0.0.1:11434");
   const [chatModel, setChatModel] = useState("qwen2.5:7b");
@@ -176,6 +205,12 @@ export function SettingsPage({ onNavigate, onAliasesChanged, onBookmarkBarChange
   const [importMessage, setImportMessage] = useState<string | null>(null);
   const [importingBookmarks, setImportingBookmarks] = useState(false);
   const [importingPasswords, setImportingPasswords] = useState(false);
+  const [standard, setStandard] = useState<StandardSettingsState>(defaultStandardSettings);
+  const [defaultDownloadPath, setDefaultDownloadPath] = useState("");
+
+  const patchStandard = (patch: Partial<StandardSettingsState>) => {
+    setStandard((prev) => ({ ...prev, ...patch }));
+  };
 
   const refreshEngineStatus = useCallback(async () => {
     setRefreshingModels(true);
@@ -209,6 +244,10 @@ export function SettingsPage({ onNavigate, onAliasesChanged, onBookmarkBarChange
       setNewTabUseHomepage(s.new_tab_use_homepage);
       setPrivateModeShortcut(s.private_mode_shortcut);
       setPanicUrlsText((s.panic_urls ?? []).join("\n"));
+      setStandard(loadStandardSettingsFromFormatted(s));
+    });
+    void window.inix?.settings.defaultDownloadPath().then((path) => {
+      if (path) setDefaultDownloadPath(path);
     });
     void window.inix?.aliases.list().then(setAliases);
     void window.inix?.vault.isConfigured().then(setVaultConfigured);
@@ -480,6 +519,7 @@ export function SettingsPage({ onNavigate, onAliasesChanged, onBookmarkBarChange
     await s.set("homepage_url", homepageUrl.trim() || "inix://newtab");
     await s.set("new_tab_use_homepage", newTabUseHomepage ? "true" : "false");
     await s.set("private_mode_shortcut", privateModeShortcut);
+    await saveStandardSettings(standard, s);
     const panicUrls = panicUrlsText
       .split("\n")
       .map((line) => line.trim())
@@ -492,6 +532,9 @@ export function SettingsPage({ onNavigate, onAliasesChanged, onBookmarkBarChange
     }
     await window.inix?.chrome.setBookmarkBar(bookmarkBarEnabled);
     onBookmarkBarChange?.(bookmarkBarEnabled);
+    onRestoreTabsChange?.(standard.startupMode === "restore");
+    const formatted = await window.inix?.settings.getFormatted();
+    if (formatted) onSettingsApplied?.(formatted);
     const map = await window.inix?.aliases.map();
     if (map && onAliasesChanged) onAliasesChanged(map);
     setSaved(true);
@@ -577,6 +620,73 @@ export function SettingsPage({ onNavigate, onAliasesChanged, onBookmarkBarChange
         </header>
 
         <main className="settings-content">
+          {section === "general" && (
+            <>
+              <GeneralSettingsSection state={standard} patch={patchStandard} />
+              <section className="settings-card">
+                <div className="settings-card-head">
+                  <div>
+                    <h2>Homepage</h2>
+                    <p>Where the Home button and Alt+Home shortcut take you.</p>
+                  </div>
+                </div>
+                <label className="settings-field">
+                  <span>Homepage URL</span>
+                  <input
+                    value={homepageUrl}
+                    onChange={(e) => setHomepageUrl(e.target.value)}
+                    placeholder="inix://newtab or https://example.com"
+                  />
+                </label>
+                <Switch
+                  className="settings-toggle"
+                  checked={newTabUseHomepage}
+                  onChange={setNewTabUseHomepage}
+                  label="Open homepage instead of the Inix new tab page for new tabs"
+                />
+                <div className="settings-divider" />
+                <div className="settings-card-head">
+                  <div>
+                    <h2>Private browsing</h2>
+                    <p>Choose what Ctrl+Shift+N does.</p>
+                  </div>
+                </div>
+                <label className="settings-field">
+                  <span>Ctrl+Shift+N opens</span>
+                  <select
+                    value={privateModeShortcut}
+                    onChange={(e) => setPrivateModeShortcut(e.target.value as "window" | "tab")}
+                  >
+                    <option value="window">New private window (all tabs private)</option>
+                    <option value="tab">New private tab in this window</option>
+                  </select>
+                </label>
+              </section>
+            </>
+          )}
+
+          {section === "appearance" && (
+            <AppearanceSettingsSection
+              state={standard}
+              patch={patchStandard}
+              bookmarkBarEnabled={bookmarkBarEnabled}
+              onBookmarkBarChange={(enabled) => {
+                setBookmarkBarEnabled(enabled);
+                onBookmarkBarChange?.(enabled);
+              }}
+            />
+          )}
+
+          {section === "downloads" && (
+            <DownloadsSettingsSection
+              state={standard}
+              patch={patchStandard}
+              defaultDownloadPath={defaultDownloadPath}
+            />
+          )}
+
+          {section === "newtab" && <NewTabSettingsSection state={standard} patch={patchStandard} />}
+
           {section === "ai" && (
             <section className="settings-card">
               <div className="settings-card-head">
@@ -889,31 +999,7 @@ export function SettingsPage({ onNavigate, onAliasesChanged, onBookmarkBarChange
               </label>
               <p className="settings-note">Hibernated tabs keep their URL and scroll position.</p>
 
-              <div className="settings-divider" />
-
-              <div className="settings-card-head">
-                <div>
-                  <h2>Homepage</h2>
-                  <p>Where the Home button and Alt+Home shortcut take you.</p>
-                </div>
-              </div>
-              <label className="settings-field">
-                <span>Homepage URL</span>
-                <input
-                  value={homepageUrl}
-                  onChange={(e) => setHomepageUrl(e.target.value)}
-                  placeholder="inix://newtab or https://example.com"
-                />
-              </label>
-              <Switch
-                className="settings-toggle"
-                checked={newTabUseHomepage}
-                onChange={setNewTabUseHomepage}
-                label="Open homepage instead of the Inix new tab page for new tabs"
-              />
-              <p className="settings-note">
-                Use <code>inix://newtab</code> for the default Inix start page, or any web address.
-              </p>
+              <BrowsingSettingsSection state={standard} patch={patchStandard} />
 
               <div className="settings-divider" />
 
@@ -939,30 +1025,13 @@ export function SettingsPage({ onNavigate, onAliasesChanged, onBookmarkBarChange
                 Your real tabs are preserved in memory until you switch back. Session restore keeps your real tabs,
                 not the safe ones.
               </p>
-
-              <div className="settings-divider" />
-
-              <div className="settings-card-head">
-                <div>
-                  <h2>Private browsing</h2>
-                  <p>Choose what Ctrl+Shift+N does.</p>
-                </div>
-              </div>
-              <label className="settings-field">
-                <span>Ctrl+Shift+N opens</span>
-                <select
-                  value={privateModeShortcut}
-                  onChange={(e) => setPrivateModeShortcut(e.target.value as "window" | "tab")}
-                >
-                  <option value="window">New private window (all tabs private)</option>
-                  <option value="tab">New private tab in this window</option>
-                </select>
-              </label>
             </section>
           )}
 
           {section === "privacy" && (
-            <section className="settings-card">
+            <>
+              <PrivacySecuritySettingsSection state={standard} patch={patchStandard} />
+              <section className="settings-card">
               <div className="settings-card-head">
                 <div>
                   <h2>Site data</h2>
@@ -1049,6 +1118,7 @@ export function SettingsPage({ onNavigate, onAliasesChanged, onBookmarkBarChange
                 </ul>
               )}
             </section>
+            </>
           )}
 
           {section === "history" && (
@@ -1388,21 +1458,7 @@ export function SettingsPage({ onNavigate, onAliasesChanged, onBookmarkBarChange
                   onChange={setCaptureEnabled}
                   label="Save page content for Inix semantic search"
                 />
-                <Switch
-                  className="settings-toggle"
-                  checked={bookmarkBarEnabled}
-                  onChange={(enabled) => {
-                    setBookmarkBarEnabled(enabled);
-                    void window.inix?.settings.set("bookmark_bar_enabled", enabled ? "true" : "false");
-                    void window.inix?.chrome.setBookmarkBar(enabled);
-                    onBookmarkBarChange?.(enabled);
-                  }}
-                  label="Show classic bookmarks bar (Chrome/Firefox-style strip under the toolbar)"
-                />
               </div>
-              <p className="settings-note">
-                New bookmarks are added to the bar when this is on. Right-click a bar item to remove it.
-              </p>
               <p className="settings-note">Everything stays on your machine — nothing is sent to the cloud.</p>
             </section>
           )}

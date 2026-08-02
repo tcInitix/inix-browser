@@ -18,8 +18,9 @@ import { BookmarkBar } from "./components/BookmarkBar";
 import { UpdatePrompt, type UpdateState } from "./components/UpdatePrompt";
 import { OnboardingFlow, type OnboardingResult } from "./components/OnboardingFlow";
 import { PanicSetup } from "./components/PanicSetup";
-import type { PermissionRequest } from "./inix.d";
+import type { PermissionRequest, InixSettings } from "./inix.d";
 import { parsePanicUrls, serializePanicUrls, normalizePanicUrls } from "./utils/panic";
+import { applyFontScale, applyThemeMode, watchSystemTheme } from "./utils/apply-appearance";
 
 const PANIC_PRELOAD_PREFIX = "inix-panic-preload-";
 const isPanicPreloadId = (id: string) => id.startsWith(PANIC_PRELOAD_PREFIX);
@@ -33,6 +34,7 @@ import {
   setAliasMap,
   buildSessionSnapshot,
   flattenTabsFromSnapshot,
+  setSearchEngineConfig,
   type Tab,
 } from "./types";
 
@@ -62,6 +64,19 @@ export default function App() {
   const [immersive, setImmersive] = useState(false);
   const [privateWindow, setPrivateWindow] = useState(false);
   const [bookmarkBarEnabled, setBookmarkBarEnabled] = useState(false);
+  const [restoreTabsOnLaunch, setRestoreTabsOnLaunch] = useState(true);
+  const closeWindowWithLastTab = useRef(false);
+  const themeModeRef = useRef<InixSettings["theme_mode"]>("dark");
+
+  const applyRuntimeSettings = useCallback((s: InixSettings) => {
+    setSearchEngineConfig(s.default_search_engine, s.custom_search_url);
+    applyThemeMode(s.theme_mode);
+    applyFontScale(s.ui_font_scale);
+    themeModeRef.current = s.theme_mode;
+    setRestoreTabsOnLaunch(s.restore_tabs_on_launch);
+    closeWindowWithLastTab.current = s.close_window_with_last_tab;
+    setBookmarkBarEnabled(s.bookmark_bar_enabled);
+  }, []);
   const [bookmarkBarRefresh, setBookmarkBarRefresh] = useState(0);
   const [updateState, setUpdateState] = useState<UpdateState>({ status: "idle" });
   const [onboardingOpen, setOnboardingOpen] = useState(false);
@@ -75,6 +90,7 @@ export default function App() {
   tabsRef.current = tabs;
   activeTabIdRef.current = activeTabId;
   const addressBarRef = useRef<AddressBarHandle>(null);
+  const focusAddressBarForTabRef = useRef<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const restored = useRef(false);
 
@@ -100,32 +116,78 @@ export default function App() {
     setTabs((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
   }, []);
 
+  const queueAddressBarFocus = useCallback((tabId: string) => {
+    focusAddressBarForTabRef.current = tabId;
+  }, []);
+
+  useEffect(() => {
+    if (!sessionReady || focusAddressBarForTabRef.current !== activeTabId) return;
+    focusAddressBarForTabRef.current = null;
+    const frame = requestAnimationFrame(() => {
+      addressBarRef.current?.focus();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [activeTabId, sessionReady]);
+
   useEffect(() => {
     void (async () => {
-      const mode = await window.inix?.window.getMode();
-      const isPrivateWin = !!mode?.privateWindow;
+      const windowMode = await window.inix?.window.getMode();
+      const isPrivateWin = !!windowMode?.privateWindow;
       setPrivateWindow(isPrivateWin);
 
       if (isPrivateWin) {
         const tab = createTab(undefined, true);
         setTabs([tab]);
         setActiveTabId(tab.id);
+        queueAddressBarFocus(tab.id);
         restored.current = true;
         setSessionReady(true);
         return;
       }
 
-      const snap = await window.inix?.session.getRestore();
-      const wasCrash = await window.inix?.session.wasCrashRestore();
-      if (snap && Object.keys(snap.nodes).length > 0) {
-        const restoredTabs = flattenTabsFromSnapshot(snap);
-        setTabs(restoredTabs);
-        setActiveTabId(snap.activeTabId);
-        if (wasCrash) showToast("Restored your last session");
+      const settings = await window.inix?.settings.getFormatted();
+      if (settings) applyRuntimeSettings(settings);
+      const startupMode =
+        settings?.startup_mode ??
+        (settings?.restore_tabs_on_launch !== false ? "restore" : "new_tab");
+      const restoreTabs = startupMode === "restore";
+      setRestoreTabsOnLaunch(restoreTabs);
+
+      if (startupMode === "restore") {
+        const snap = await window.inix?.session.getRestore();
+        const wasCrash = await window.inix?.session.wasCrashRestore();
+        if (restoreTabs && snap && Object.keys(snap.nodes).length > 0) {
+          const restoredTabs = flattenTabsFromSnapshot(snap);
+          setTabs(restoredTabs);
+          setActiveTabId(snap.activeTabId);
+          if (wasCrash) showToast("Restored your last session");
+        } else {
+          const tab = createTab();
+          setTabs([tab]);
+          setActiveTabId(tab.id);
+          queueAddressBarFocus(tab.id);
+        }
+      } else if (startupMode === "homepage") {
+        const url = settings?.homepage_url?.trim() || "inix://newtab";
+        const tab = createTab(url);
+        setTabs([tab]);
+        setActiveTabId(tab.id);
+        queueAddressBarFocus(tab.id);
+        if (!isShellUrl(url)) void browser()?.navigate(tab.id, url);
+      } else if (startupMode === "urls" && (settings?.startup_urls?.length ?? 0) > 0) {
+        const urls = settings!.startup_urls;
+        const newTabs = urls.map((url) => createTab(url.trim() || "inix://newtab"));
+        setTabs(newTabs);
+        setActiveTabId(newTabs[0].id);
+        queueAddressBarFocus(newTabs[0].id);
+        for (const tab of newTabs) {
+          if (!isShellUrl(tab.url)) void browser()?.navigate(tab.id, tab.url);
+        }
       } else {
         const tab = createTab();
         setTabs([tab]);
         setActiveTabId(tab.id);
+        queueAddressBarFocus(tab.id);
       }
       restored.current = true;
       setSessionReady(true);
@@ -133,17 +195,17 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!sessionReady || tabs.length === 0) return;
+    if (!sessionReady || tabs.length === 0 || !restoreTabsOnLaunch) return;
     const snapshot =
       panicMode && realSessionRef.current
         ? buildSessionSnapshot(realSessionRef.current.tabs, realSessionRef.current.activeTabId)
         : buildSessionSnapshot(tabs, activeTabId);
     void window.inix?.session.sync(snapshot);
-  }, [tabs, activeTabId, sessionReady, panicMode]);
+  }, [tabs, activeTabId, sessionReady, panicMode, restoreTabsOnLaunch]);
 
   useEffect(() => {
     const onUnload = () => {
-      if (tabs.length === 0) return;
+      if (tabs.length === 0 || !restoreTabsOnLaunch) return;
       const snapshot =
         panicMode && realSessionRef.current
           ? buildSessionSnapshot(realSessionRef.current.tabs, realSessionRef.current.activeTabId)
@@ -153,7 +215,7 @@ export default function App() {
     };
     window.addEventListener("beforeunload", onUnload);
     return () => window.removeEventListener("beforeunload", onUnload);
-  }, [tabs, activeTabId, panicMode]);
+  }, [tabs, activeTabId, panicMode, restoreTabsOnLaunch]);
 
   useEffect(() => {
     void window.inix?.aliases.map().then((map) => {
@@ -203,11 +265,12 @@ export default function App() {
 
   useEffect(() => {
     void window.inix?.settings.getFormatted().then((s) => {
-      if (s?.bookmark_bar_enabled != null) {
-        setBookmarkBarEnabled(s.bookmark_bar_enabled);
-      }
+      if (s) applyRuntimeSettings(s);
     });
-  }, []);
+    return watchSystemTheme(() => {
+      if (themeModeRef.current === "system") applyThemeMode("system");
+    });
+  }, [applyRuntimeSettings]);
 
   useEffect(() => {
     void window.inix?.chrome.setBookmarkBar(bookmarkBarEnabled);
@@ -323,12 +386,13 @@ export default function App() {
       const tab = createTab(url, forcePrivate, parentId);
       setTabs((prev) => [...prev, tab]);
       setActiveTabId(tab.id);
+      queueAddressBarFocus(tab.id);
       if (forcePrivate) showToast("Private tab — history won't be saved");
       if (!isShellUrl(url)) {
         void browser()?.navigate(tab.id, url);
       }
     })();
-  }, [privateWindow]);
+  }, [privateWindow, queueAddressBarFocus]);
 
   const openLibrary = useCallback(() => {
     updateTab(activeTabId, { url: "inix://library", title: "Inix Library", isLoading: false });
@@ -345,8 +409,13 @@ export default function App() {
         browser()?.destroyTab(id);
         initialized.current.delete(id);
         if (prev.length === 1) {
+          if (closeWindowWithLastTab.current) {
+            window.inix?.window.close();
+            return prev;
+          }
           const fresh = createTab();
           setActiveTabId(fresh.id);
+          queueAddressBarFocus(fresh.id);
           return [fresh];
         }
         const idx = prev.findIndex((t) => t.id === id);
@@ -362,8 +431,44 @@ export default function App() {
         return next;
       });
     },
-    [activeTabId]
+    [activeTabId, queueAddressBarFocus]
   );
+
+  const closeOtherTabs = useCallback((keepId: string) => {
+    setTabs((prev) => {
+      if (prev.length <= 1) return prev;
+      const keep = prev.find((t) => t.id === keepId);
+      if (!keep) return prev;
+
+      for (const tab of prev) {
+        if (tab.id === keepId) continue;
+        if (!tab.private) {
+          closedTabs.current = [tab, ...closedTabs.current].slice(0, 25);
+        }
+        browser()?.destroyTab(tab.id);
+        initialized.current.delete(tab.id);
+      }
+
+      setActiveTabId(keepId);
+      return [keep];
+    });
+  }, []);
+
+  const closeAllTabs = useCallback(() => {
+    setTabs((prev) => {
+      for (const tab of prev) {
+        if (!tab.private) {
+          closedTabs.current = [tab, ...closedTabs.current].slice(0, 25);
+        }
+        browser()?.destroyTab(tab.id);
+        initialized.current.delete(tab.id);
+      }
+      const fresh = createTab();
+      setActiveTabId(fresh.id);
+      queueAddressBarFocus(fresh.id);
+      return [fresh];
+    });
+  }, [queueAddressBarFocus]);
 
   const reopenClosedTab = useCallback(() => {
     const closed = closedTabs.current.shift();
@@ -794,6 +899,8 @@ export default function App() {
           onNavigate={navigate}
           onAliasesChanged={(map) => setAliasMap(map)}
           onBookmarkBarChange={setBookmarkBarEnabled}
+          onRestoreTabsChange={setRestoreTabsOnLaunch}
+          onSettingsApplied={applyRuntimeSettings}
         />
       );
     }
@@ -838,6 +945,8 @@ export default function App() {
         activeTabId={activeTabId}
         onSelect={setActiveTabId}
         onClose={closeTab}
+        onCloseOthers={closeOtherTabs}
+        onCloseAll={closeAllTabs}
         onNewTab={() => addTab()}
         onPin={pinTab}
         onDuplicate={duplicateTab}
@@ -867,12 +976,14 @@ export default function App() {
       {bookmarkBarEnabled && !immersive && (
         <BookmarkBar
           refreshKey={bookmarkBarRefresh}
+          activeTabId={activeTabId}
           onNavigate={navigate}
           onOpenNewTab={(url) => {
             const tab = createTab(url);
             setTabs((prev) => [...prev, tab]);
             setActiveTabId(tab.id);
           }}
+          onChanged={() => setBookmarkBarRefresh((k) => k + 1)}
         />
       )}
       <FindBar open={findOpen} tabId={activeTabId} onClose={() => setFindOpen(false)} />

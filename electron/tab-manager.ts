@@ -20,10 +20,11 @@ import {
   initProfileSessions,
 } from "./profiles/manager";
 
+import { getSettings } from "./storage/settings";
 import { getAutofillBootstrapScript } from "./autofill/inject";
 
 export const BASE_TOP_CHROME = 132;
-export const BOOKMARK_BAR_HEIGHT = 32;
+export const BOOKMARK_BAR_HEIGHT = 36;
 export const TOP_CHROME = BASE_TOP_CHROME;
 
 export const BOTTOM_CHROME = 32;
@@ -645,6 +646,18 @@ export class TabManager {
 
     });
 
+    wc.on("will-navigate", (event, url) => {
+      if (!getSettings().https_only_mode) return;
+      if (!url.startsWith("http://")) return;
+      try {
+        const secure = url.replace(/^http:\/\//i, "https://");
+        event.preventDefault();
+        wc.loadURL(secure);
+      } catch {
+        // keep original navigation
+      }
+    });
+
 
 
     wc.on("before-input-event", (_event, input) => {
@@ -747,7 +760,7 @@ export class TabManager {
         onPageLoaded(tabId);
       }
 
-      if (!wc.getURL().startsWith("inix://")) {
+      if (!wc.getURL().startsWith("inix://") && getSettings().autofill_enabled) {
         void wc.executeJavaScript(getAutofillBootstrapScript()).catch(() => {});
       }
 
@@ -855,7 +868,7 @@ export class TabManager {
 
     this.wireEvents(tabId, view);
 
-    const zoom = this.zoomLevels.get(tabId) ?? 0;
+    const zoom = this.zoomLevels.get(tabId) ?? getSettings().default_zoom_level;
 
     view.webContents.setZoomLevel(zoom);
 

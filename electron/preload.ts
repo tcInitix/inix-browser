@@ -279,8 +279,15 @@ contextBridge.exposeInMainWorld("inix", {
     list: (limit?: number) => ipcRenderer.invoke("vault:list", limit),
   },
   bookmarks: {
-    saveFromTab: (tabId: string, opts?: { userTags?: string[]; workspaceId?: number }) =>
-      ipcRenderer.invoke("bookmarks:save-from-tab", tabId, opts),
+    saveFromTab: (
+      tabId: string,
+      opts?: {
+        userTags?: string[];
+        workspaceId?: number;
+        barParentId?: number | null;
+        barInsertIndex?: number;
+      }
+    ) => ipcRenderer.invoke("bookmarks:save-from-tab", tabId, opts),
     remove: (url: string) => ipcRenderer.invoke("bookmarks:remove", url),
     list: (filter?: { tags?: string[]; workspaceId?: number; query?: string }) =>
       ipcRenderer.invoke("bookmarks:list", filter),
@@ -293,6 +300,18 @@ contextBridge.exposeInMainWorld("inix", {
     listBar: () => ipcRenderer.invoke("bookmarks:list-bar"),
     setBar: (id: number, onBar: boolean) => ipcRenderer.invoke("bookmarks:set-bar", id, onBar),
     addUrlToBar: (url: string) => ipcRenderer.invoke("bookmarks:add-url-to-bar", url),
+    listBarTree: () => ipcRenderer.invoke("bookmarks:list-bar-tree"),
+    barCreateFolder: (title: string, parentId?: number | null) =>
+      ipcRenderer.invoke("bookmarks:bar-create-folder", title, parentId ?? null),
+    barRenameFolder: (nodeId: number, title: string) =>
+      ipcRenderer.invoke("bookmarks:bar-rename-folder", nodeId, title),
+    barDeleteNode: (nodeId: number) => ipcRenderer.invoke("bookmarks:bar-delete-node", nodeId),
+    barMoveNode: (nodeId: number, parentId: number | null, index: number) =>
+      ipcRenderer.invoke("bookmarks:bar-move-node", nodeId, parentId, index),
+    barAddBookmark: (bookmarkId: number, parentId?: number | null, insertIndex?: number) =>
+      ipcRenderer.invoke("bookmarks:bar-add-bookmark", bookmarkId, parentId ?? null, insertIndex),
+    barAddUrl: (url: string, parentId?: number | null, insertIndex?: number) =>
+      ipcRenderer.invoke("bookmarks:bar-add-url", url, parentId ?? null, insertIndex),
   },
   aliases: {
     list: () => ipcRenderer.invoke("aliases:list"),
@@ -321,6 +340,8 @@ contextBridge.exposeInMainWorld("inix", {
     set: (key: string, value: string) => ipcRenderer.invoke("settings:set", key, value),
     getFormatted: () => ipcRenderer.invoke("settings:get-formatted"),
     rebuildIndex: () => ipcRenderer.invoke("settings:rebuild-index"),
+    pickDownloadFolder: () => ipcRenderer.invoke("settings:pick-download-folder") as Promise<string | null>,
+    defaultDownloadPath: () => ipcRenderer.invoke("settings:default-download-path") as Promise<string>,
   },
   shortcuts: {
     onAction: (callback: (action: string) => void) => {

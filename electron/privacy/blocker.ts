@@ -1,4 +1,5 @@
 import type { Session } from "electron";
+import { getSetting } from "../storage/settings";
 
 /** Privacy-focused request blocking — no telemetry, no third-party trackers. */
 
@@ -88,6 +89,10 @@ function isBlocked(url: string): boolean {
 
 export function setupPrivacyBlocking(sess: Session) {
   sess.webRequest.onBeforeRequest({ urls: ["*://*/*"] }, (details, callback) => {
+    if (getSetting("tracker_blocking_enabled") === "false") {
+      callback({});
+      return;
+    }
     if (isBlocked(details.url)) {
       callback({ cancel: true });
     } else {

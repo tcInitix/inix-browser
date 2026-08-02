@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import { session, type BrowserWindow } from "electron";
 import { getAllProfilePartitions, PRIVATE_PARTITION } from "./profiles/manager";
-import { getSetting, setSetting } from "./storage/settings";
+import { getSetting, setSetting, type PermissionDefault } from "./storage/settings";
 
 interface PendingPermission {
   resolve: (allow: boolean) => void;
@@ -75,6 +75,27 @@ function removeDeniedForOrigin(partition: string, origin: string): void {
   setSetting("permission_denied", JSON.stringify([...denied]));
 }
 
+function defaultForPermission(permission: string): PermissionDefault {
+  if (permission === "notifications") {
+    const v = getSetting("default_notifications");
+    return v === "allow" || v === "block" ? v : "ask";
+  }
+  if (permission === "geolocation") {
+    const v = getSetting("default_geolocation");
+    return v === "allow" || v === "block" ? v : "ask";
+  }
+  if (
+    permission === "media" ||
+    permission === "camera" ||
+    permission === "microphone" ||
+    permission.startsWith("media")
+  ) {
+    const v = getSetting("default_media");
+    return v === "allow" || v === "block" ? v : "ask";
+  }
+  return "ask";
+}
+
 function dismissPrompt(id: string): void {
   getWindow?.()?.webContents.send("permission:dismiss", { id });
 }
@@ -130,6 +151,18 @@ export function wirePermissionHandlersForPartition(partition: string): void {
     }
 
     if (denied.has(key)) {
+      callback(false);
+      return;
+    }
+
+    const defaultAction = defaultForPermission(permission);
+    if (defaultAction === "allow") {
+      granted.add(key);
+      callback(true);
+      return;
+    }
+    if (defaultAction === "block") {
+      persistDenied(key);
       callback(false);
       return;
     }

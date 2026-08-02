@@ -1,3 +1,5 @@
+import { buildSearchUrl, type SearchEngineId } from "./constants/search-engines";
+
 export interface Tab {
 
   id: string;
@@ -87,6 +89,14 @@ export interface SessionSnapshot {
 
 
 let aliasMap: Record<string, string> = {};
+
+let searchEngineId: SearchEngineId = "duckduckgo";
+let customSearchUrl = "";
+
+export function setSearchEngineConfig(engine: SearchEngineId, customUrl = ""): void {
+  searchEngineId = engine;
+  customSearchUrl = customUrl;
+}
 
 
 
@@ -304,8 +314,7 @@ export function normalizeUrl(input: string): string {
 
 
 
-  return `https://duckduckgo.com/?q=${encodeURIComponent(trimmed)}`;
-
+  return buildSearchUrl(trimmed, searchEngineId, customSearchUrl);
 }
 
 

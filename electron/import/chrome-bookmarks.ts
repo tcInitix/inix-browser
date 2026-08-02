@@ -6,6 +6,7 @@ import {
   type ImportBookmarkItem,
   type ImportBookmarksResult,
 } from "../storage/bookmarks";
+import type { ImportBarNode } from "../storage/bookmark-bar";
 import { getChromeProfilePaths } from "./chrome-paths";
 
 interface ChromeBookmarkNode {
@@ -15,25 +16,53 @@ interface ChromeBookmarkNode {
   children?: ChromeBookmarkNode[];
 }
 
-function walkChromeBookmarks(
+export interface ParsedChromeImport {
+  items: ImportBookmarkItem[];
+  barTree: ImportBarNode[];
+}
+
+function isValidUrl(url: string | undefined): url is string {
+  return !!url && (url.startsWith("http://") || url.startsWith("https://"));
+}
+
+function walkChromeBookmarksFlat(
   node: ChromeBookmarkNode,
   onBar: boolean,
   out: ImportBookmarkItem[]
 ): void {
-  if (node.type === "url" && node.url) {
-    if (node.url.startsWith("http://") || node.url.startsWith("https://")) {
-      out.push({ url: node.url, title: node.name?.trim() || node.url, onBar });
-    }
+  if (node.type === "url" && isValidUrl(node.url)) {
+    out.push({ url: node.url, title: node.name?.trim() || node.url, onBar });
     return;
   }
   if (node.type === "folder" && node.children) {
     for (const child of node.children) {
-      walkChromeBookmarks(child, onBar, out);
+      walkChromeBookmarksFlat(child, onBar, out);
     }
   }
 }
 
-export function parseChromeBookmarksJson(raw: string): ImportBookmarkItem[] {
+function walkChromeBarTree(node: ChromeBookmarkNode): ImportBarNode[] {
+  const out: ImportBarNode[] = [];
+  if (!node.children) return out;
+  for (const child of node.children) {
+    if (child.type === "url" && isValidUrl(child.url)) {
+      out.push({
+        type: "bookmark",
+        url: child.url,
+        title: child.name?.trim() || child.url,
+      });
+    } else if (child.type === "folder") {
+      out.push({
+        type: "folder",
+        title: child.name?.trim() || "Folder",
+        children: walkChromeBarTree(child),
+      });
+    }
+  }
+  return out;
+}
+
+export function parseChromeBookmarksJson(raw: string): ParsedChromeImport {
   let data: { roots?: Record<string, ChromeBookmarkNode> };
   try {
     data = JSON.parse(raw) as { roots?: Record<string, ChromeBookmarkNode> };
@@ -43,13 +72,17 @@ export function parseChromeBookmarksJson(raw: string): ImportBookmarkItem[] {
     );
   }
   const items: ImportBookmarkItem[] = [];
+  let barTree: ImportBarNode[] = [];
   const roots = data.roots;
-  if (!roots) return items;
+  if (!roots) return { items, barTree };
 
-  if (roots.bookmark_bar) walkChromeBookmarks(roots.bookmark_bar, true, items);
-  if (roots.other) walkChromeBookmarks(roots.other, false, items);
-  if (roots.synced) walkChromeBookmarks(roots.synced, false, items);
-  return items;
+  if (roots.bookmark_bar) {
+    barTree = walkChromeBarTree(roots.bookmark_bar);
+    walkChromeBookmarksFlat(roots.bookmark_bar, true, items);
+  }
+  if (roots.other) walkChromeBookmarksFlat(roots.other, false, items);
+  if (roots.synced) walkChromeBookmarksFlat(roots.synced, false, items);
+  return { items, barTree };
 }
 
 function decodeHtmlEntities(text: string): string {
@@ -99,7 +132,11 @@ function extractDlContent(html: string, startFrom = 0): { content: string; end: 
   return null;
 }
 
-function walkNetscapeBookmarkSection(section: string, onBar: boolean, out: ImportBookmarkItem[]): void {
+function walkNetscapeBookmarkSectionFlat(
+  section: string,
+  onBar: boolean,
+  out: ImportBookmarkItem[]
+): void {
   let i = 0;
   const lower = section.toLowerCase();
 
@@ -116,13 +153,12 @@ function walkNetscapeBookmarkSection(section: string, onBar: boolean, out: Impor
     const h3Match = rest.match(/^<H3([^>]*)>([\s\S]*?)<\/H3>/i);
     if (h3Match) {
       const attrs = h3Match[1];
-      const folderOnBar =
-        onBar || /PERSONAL_TOOLBAR_FOLDER\s*=\s*["']?true/i.test(attrs);
+      const folderOnBar = onBar || /PERSONAL_TOOLBAR_FOLDER\s*=\s*["']?true/i.test(attrs);
       i += h3Match[0].length;
 
       const dl = extractDlContent(section, i);
       if (dl) {
-        walkNetscapeBookmarkSection(dl.content, folderOnBar, out);
+        walkNetscapeBookmarkSectionFlat(dl.content, folderOnBar, out);
         i += dl.end;
       }
       continue;
@@ -132,7 +168,7 @@ function walkNetscapeBookmarkSection(section: string, onBar: boolean, out: Impor
     if (aMatch) {
       const hrefMatch = aMatch[1].match(/HREF\s*=\s*["']([^"']+)["']/i);
       const url = hrefMatch?.[1]?.trim();
-      if (url && (url.startsWith("http://") || url.startsWith("https://"))) {
+      if (isValidUrl(url)) {
         const title = decodeHtmlEntities(stripHtmlTags(aMatch[2]).trim() || url);
         out.push({ url, title, onBar });
       }
@@ -145,14 +181,76 @@ function walkNetscapeBookmarkSection(section: string, onBar: boolean, out: Impor
   }
 }
 
+function walkNetscapeBarTree(section: string, toolbarRoot: boolean): ImportBarNode[] {
+  const out: ImportBarNode[] = [];
+  let i = 0;
+  const lower = section.toLowerCase();
+
+  while (i < section.length) {
+    const dtIdx = lower.indexOf("<dt", i);
+    if (dtIdx === -1) break;
+
+    const dtEnd = section.indexOf(">", dtIdx);
+    if (dtEnd === -1) break;
+    i = dtEnd + 1;
+
+    const rest = section.slice(i);
+
+    const h3Match = rest.match(/^<H3([^>]*)>([\s\S]*?)<\/H3>/i);
+    if (h3Match) {
+      const attrs = h3Match[1];
+      const isToolbarFolder =
+        toolbarRoot || /PERSONAL_TOOLBAR_FOLDER\s*=\s*["']?true/i.test(attrs);
+      const title = decodeHtmlEntities(stripHtmlTags(h3Match[2]).trim() || "Folder");
+      i += h3Match[0].length;
+
+      const dl = extractDlContent(section, i);
+      if (dl) {
+        if (isToolbarFolder && /PERSONAL_TOOLBAR_FOLDER\s*=\s*["']?true/i.test(attrs)) {
+          out.push(...walkNetscapeBarTree(dl.content, true));
+        } else if (toolbarRoot) {
+          out.push({
+            type: "folder",
+            title,
+            children: walkNetscapeBarTree(dl.content, true),
+          });
+        } else {
+          out.push(...walkNetscapeBarTree(dl.content, false));
+        }
+        i += dl.end;
+      }
+      continue;
+    }
+
+    const aMatch = rest.match(/^<A\s+([^>]*?)>([\s\S]*?)<\/A>/i);
+    if (aMatch) {
+      const hrefMatch = aMatch[1].match(/HREF\s*=\s*["']([^"']+)["']/i);
+      const url = hrefMatch?.[1]?.trim();
+      if (toolbarRoot && isValidUrl(url)) {
+        const title = decodeHtmlEntities(stripHtmlTags(aMatch[2]).trim() || url);
+        out.push({ type: "bookmark", url, title });
+      }
+      i += aMatch[0].length;
+      continue;
+    }
+
+    const nextDt = lower.indexOf("<dt", i);
+    i = nextDt === -1 ? section.length : nextDt;
+  }
+
+  return out;
+}
+
 /** Parse Chrome/Firefox/Edge HTML export (Bookmark Manager → Export bookmarks). */
-export function parseChromeBookmarksHtml(raw: string): ImportBookmarkItem[] {
+export function parseChromeBookmarksHtml(raw: string): ParsedChromeImport {
   const items: ImportBookmarkItem[] = [];
+  let barTree: ImportBarNode[] = [];
   const rootDl = extractDlContent(raw, 0);
   if (rootDl) {
-    walkNetscapeBookmarkSection(rootDl.content, false, items);
+    walkNetscapeBookmarkSectionFlat(rootDl.content, false, items);
+    barTree = walkNetscapeBarTree(rootDl.content, false);
   }
-  return items;
+  return { items, barTree };
 }
 
 function isJsonBookmarks(raw: string): boolean {
@@ -171,7 +269,7 @@ function isHtmlBookmarks(raw: string): boolean {
   );
 }
 
-export function parseChromeBookmarksFile(raw: string): ImportBookmarkItem[] {
+export function parseChromeBookmarksFile(raw: string): ParsedChromeImport {
   if (isJsonBookmarks(raw)) {
     return parseChromeBookmarksJson(raw);
   }
@@ -214,15 +312,15 @@ export function importChromeBookmarksFromFile(filePath: string): ImportBookmarks
     throw new Error("That file is empty. Export bookmarks from Chrome again.");
   }
 
-  const items = parseChromeBookmarksFile(raw);
-  if (items.length === 0) {
+  const parsed = parseChromeBookmarksFile(raw);
+  if (parsed.items.length === 0) {
     throw new Error(
       "No bookmarks found in that file. In Chrome open Bookmark Manager → ⋮ (menu) → Export bookmarks, then choose the saved .html file."
     );
   }
 
-  const result = importBookmarks(items);
-  return { ...result, parsed: items.length };
+  const result = importBookmarks(parsed.items, parsed.barTree);
+  return { ...result, parsed: parsed.items.length };
 }
 
 export function importChromeBookmarksFromProfile(profileDir: string): ImportBookmarksResult {
@@ -244,4 +342,9 @@ export function importChromeBookmarksFromProfile(profileDir: string): ImportBook
   } finally {
     cleanup?.();
   }
+}
+
+// Legacy flat export for callers expecting ImportBookmarkItem[]
+export function parseChromeBookmarksJsonFlat(raw: string): ImportBookmarkItem[] {
+  return parseChromeBookmarksJson(raw).items;
 }

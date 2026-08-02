@@ -2,6 +2,8 @@ import { useState, useEffect, forwardRef, useImperativeHandle, useRef, type Form
 import type { Tab } from "../types";
 import { isShellUrl } from "../types";
 
+export const INIX_BOOKMARK_DRAG = "application/x-inix-bookmark";
+
 export interface AddressBarHandle {
   focus: () => void;
 }
@@ -97,6 +99,8 @@ export const NavBar = forwardRef<AddressBarHandle, NavBarProps>(function NavBar(
   const securityIcon =
     securityState === "secure" ? "🔒" : securityState === "warning" ? "⚠" : securityState === "insecure" ? "⚠" : "○";
 
+  const canDragSite = !isShellUrl(tab.url) && tab.url.startsWith("http");
+
   return (
     <nav className="nav-bar">
       <div className="nav-controls">
@@ -121,13 +125,35 @@ export const NavBar = forwardRef<AddressBarHandle, NavBarProps>(function NavBar(
         </button>
       </div>
       <form className="address-form" onSubmit={handleSubmit}>
-        {showSecure && (
-          <span
-            className={`address-secure ${securityState}`}
-            title={securityTitle}
+        {canDragSite && (
+          <div
+            className="address-site-chip"
+            draggable
+            title="Drag to bookmarks bar to save"
+            onDragStart={(e) => {
+              e.dataTransfer.setData(
+                INIX_BOOKMARK_DRAG,
+                JSON.stringify({ url: tab.url, title: tab.title, tabId: tab.id })
+              );
+              e.dataTransfer.effectAllowed = "copy";
+              if (tab.favicon) {
+                const img = new Image();
+                img.src = tab.favicon;
+                e.dataTransfer.setDragImage(img, 8, 8);
+              }
+            }}
           >
-            {securityIcon}
-          </span>
+            {tab.favicon ? (
+              <img src={tab.favicon} alt="" className="address-site-chip-icon" />
+            ) : (
+              <span className="address-site-chip-icon address-site-chip-globe">◉</span>
+            )}
+            {showSecure && (
+              <span className={`address-site-chip-lock ${securityState}`} title={securityTitle}>
+                {securityIcon}
+              </span>
+            )}
+          </div>
         )}
         <button type="button" className="address-search-btn" title="Inix Search (/)" onClick={onOpenSearch}>
           ⌕

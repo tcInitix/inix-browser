@@ -1,5 +1,67 @@
 import type { HistoryEntry, HistoryTier, SessionSnapshot, VaultEntry } from "./types";
 
+export type SearchEngineId =
+  | "duckduckgo"
+  | "google"
+  | "bing"
+  | "brave"
+  | "ecosia"
+  | "startpage"
+  | "custom";
+
+export type StartupMode = "restore" | "new_tab" | "homepage" | "urls";
+export type ThemeMode = "dark" | "light" | "system";
+export type UiFontScale = "small" | "medium" | "large";
+export type PermissionDefault = "ask" | "allow" | "block";
+
+export interface InixSettings {
+  ai_provider: "local" | "api";
+  engine_host: string;
+  chat_model: string;
+  embed_model: string;
+  api_base_url: string;
+  api_key: string;
+  api_model: string;
+  capture_enabled: boolean;
+  archive_enabled: boolean;
+  tab_freeze_enabled: boolean;
+  tab_freeze_minutes: number;
+  history_mode: HistoryTier;
+  transient_purge_on_close: boolean;
+  transient_retention_hours: number;
+  homepage_url: string;
+  new_tab_use_homepage: boolean;
+  restore_tabs_on_launch: boolean;
+  private_mode_shortcut: "window" | "tab";
+  bookmark_bar_enabled: boolean;
+  panic_configured: boolean;
+  panic_urls: string[];
+  new_tab_quick_links: Array<{ label: string; url: string; icon?: "letter" }>;
+  startup_mode: StartupMode;
+  startup_urls: string[];
+  default_search_engine: SearchEngineId;
+  custom_search_url: string;
+  theme_mode: ThemeMode;
+  default_zoom_level: number;
+  ui_font_scale: UiFontScale;
+  tracker_blocking_enabled: boolean;
+  https_only_mode: boolean;
+  block_third_party_cookies: boolean;
+  clear_cookies_on_exit: boolean;
+  clear_cache_on_exit: boolean;
+  offer_save_passwords: boolean;
+  autofill_enabled: boolean;
+  default_notifications: PermissionDefault;
+  default_geolocation: PermissionDefault;
+  default_media: PermissionDefault;
+  download_path: string;
+  prompt_for_download: boolean;
+  close_window_with_last_tab: boolean;
+  open_links_in_new_tab: boolean;
+  new_tab_show_search: boolean;
+  new_tab_show_quick_links: boolean;
+}
+
 export interface Bookmark {
   id: number;
   url: string;
@@ -15,7 +77,12 @@ export interface Bookmark {
   snapshot_path: string;
   snapshot_at: number | null;
   notes: string;
+  on_bookmark_bar?: boolean;
 }
+
+export type BarNode =
+  | { id: number; type: "folder"; title: string; children: BarNode[] }
+  | { id: number; type: "bookmark"; bookmark: Bookmark };
 
 export interface CanvasBookmark extends Bookmark {
   pin_x: number;
@@ -283,7 +350,15 @@ export interface InixAPI {
     list: (limit?: number) => Promise<VaultEntry[]>;
   };
   bookmarks: {
-    saveFromTab: (tabId: string, opts?: { userTags?: string[]; workspaceId?: number }) => Promise<{ ok: boolean; bookmark?: Bookmark; error?: string }>;
+    saveFromTab: (
+      tabId: string,
+      opts?: {
+        userTags?: string[];
+        workspaceId?: number;
+        barParentId?: number | null;
+        barInsertIndex?: number;
+      }
+    ) => Promise<{ ok: boolean; bookmark?: Bookmark; error?: string }>;
     remove: (url: string) => Promise<boolean>;
     list: (filter?: { tags?: string[]; workspaceId?: number; query?: string }) => Promise<Bookmark[]>;
     get: (id: number) => Promise<Bookmark | null>;
@@ -295,6 +370,13 @@ export interface InixAPI {
     listBar: () => Promise<Bookmark[]>;
     setBar: (id: number, onBar: boolean) => Promise<boolean>;
     addUrlToBar: (url: string) => Promise<boolean>;
+    listBarTree: () => Promise<BarNode[]>;
+    barCreateFolder: (title: string, parentId?: number | null) => Promise<number>;
+    barRenameFolder: (nodeId: number, title: string) => Promise<boolean>;
+    barDeleteNode: (nodeId: number) => Promise<boolean>;
+    barMoveNode: (nodeId: number, parentId: number | null, index: number) => Promise<boolean>;
+    barAddBookmark: (bookmarkId: number, parentId?: number | null, insertIndex?: number) => Promise<number | null>;
+    barAddUrl: (url: string, parentId?: number | null, insertIndex?: number) => Promise<number | null>;
   };
   aliases: {
     list: () => Promise<UrlAlias[]>;
@@ -317,30 +399,10 @@ export interface InixAPI {
   settings: {
     get: () => Promise<Record<string, string>>;
     set: (key: string, value: string) => Promise<boolean>;
-    getFormatted: () => Promise<{
-      ai_provider: "local" | "api";
-      engine_host: string;
-      chat_model: string;
-      embed_model: string;
-      api_base_url: string;
-      api_key: string;
-      api_model: string;
-      capture_enabled: boolean;
-      archive_enabled: boolean;
-      tab_freeze_enabled: boolean;
-      tab_freeze_minutes: number;
-      history_mode: HistoryTier;
-      transient_purge_on_close: boolean;
-      transient_retention_hours: number;
-      homepage_url: string;
-      new_tab_use_homepage: boolean;
-      private_mode_shortcut: "window" | "tab";
-      bookmark_bar_enabled: boolean;
-      panic_configured: boolean;
-      panic_urls: string[];
-      new_tab_quick_links: Array<{ label: string; url: string }>;
-    }>;
+    getFormatted: () => Promise<InixSettings>;
     rebuildIndex: () => Promise<boolean>;
+    pickDownloadFolder: () => Promise<string | null>;
+    defaultDownloadPath: () => Promise<string>;
   };
   shortcuts: {
     onAction: (callback: (action: string) => void) => () => void;

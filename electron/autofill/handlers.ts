@@ -24,6 +24,7 @@ import {
   deleteProfile,
   getProfile,
 } from "../profiles/manager";
+import { getSettings } from "../storage/settings";
 import { isVaultConfigured, isVaultUnlocked } from "../storage/vault";
 
 export function registerAutofillHandlers(
@@ -36,6 +37,7 @@ export function registerAutofillHandlers(
       payload: { origin: string; username: string; password: string; title: string }
     ) => {
       if (!payload.origin || !payload.username || !payload.password) return;
+      if (!getSettings().offer_save_passwords) return;
       if (!isVaultConfigured() || !isVaultUnlocked()) return;
       if (credentialExists(payload.origin, payload.username)) return;
 

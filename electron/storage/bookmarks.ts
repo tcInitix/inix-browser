@@ -14,6 +14,13 @@ import {
 } from "./workspaces";
 import { getSettings } from "./settings";
 import { EXTRACT_PAGE_SCRIPT } from "./page-extractor";
+import {
+  appendBookmarkToBarRoot,
+  addBookmarkNode,
+  deleteNode,
+  importBarTree,
+  type ImportBarNode,
+} from "./bookmark-bar";
 
 export interface Bookmark {
   id: number;
@@ -44,6 +51,8 @@ export interface SaveBookmarkOptions {
   workspaceId?: number;
   pinX?: number;
   pinY?: number;
+  barParentId?: number | null;
+  barInsertIndex?: number;
 }
 
 function rowToBookmark(row: Record<string, unknown>): Bookmark {
@@ -111,7 +120,23 @@ export interface ImportBookmarksResult {
   parsed?: number;
 }
 
-export function importBookmarks(items: ImportBookmarkItem[]): ImportBookmarksResult {
+export interface ImportBookmarkItem {
+  url: string;
+  title: string;
+  onBar?: boolean;
+}
+
+export interface ImportBookmarksResult {
+  imported: number;
+  updated: number;
+  skipped: number;
+  parsed?: number;
+}
+
+export function importBookmarks(
+  items: ImportBookmarkItem[],
+  barTree?: ImportBarNode[]
+): ImportBookmarksResult {
   let imported = 0;
   let updated = 0;
   let skipped = 0;
@@ -128,7 +153,6 @@ export function importBookmarks(items: ImportBookmarkItem[]): ImportBookmarksRes
     const title = item.title?.trim() || url;
     const existing = getBookmarkByUrl(url);
     if (existing) {
-      if (item.onBar) setBookmarkOnBar(existing.id, true);
       if (!isBookmarkPinned(wsId, existing.id)) {
         pinBookmarkAtLayoutIndex(wsId, existing.id, layoutIndex++);
       }
@@ -136,10 +160,23 @@ export function importBookmarks(items: ImportBookmarkItem[]): ImportBookmarksRes
       continue;
     }
 
-    const bookmark = addBookmark(url, title);
-    if (item.onBar) setBookmarkOnBar(bookmark.id, true);
-    pinBookmarkAtLayoutIndex(wsId, bookmark.id, layoutIndex++);
+    addBookmark(url, title);
+    pinBookmarkAtLayoutIndex(wsId, getBookmarkByUrl(url)!.id, layoutIndex++);
     imported++;
+  }
+
+  if (barTree && barTree.length > 0) {
+    importBarTree(barTree, true);
+  } else {
+    const barItems = items.filter((i) => i.onBar);
+    if (barItems.length > 0) {
+      const nodes: ImportBarNode[] = barItems.map((i) => ({
+        type: "bookmark" as const,
+        url: i.url,
+        title: i.title,
+      }));
+      importBarTree(nodes, true);
+    }
   }
 
   return { imported, updated, skipped };
@@ -217,8 +254,11 @@ export async function saveBookmarkFromTab(
     setBookmarkTags(bookmarkId, allTags);
 
     if (getSettings().bookmark_bar_enabled) {
-      runExec("UPDATE bookmarks SET on_bookmark_bar = 1 WHERE id = ?", [bookmarkId]);
-      saveDatabase();
+      if (opts.barParentId !== undefined || opts.barInsertIndex !== undefined) {
+        addBookmarkNode(bookmarkId, opts.barParentId ?? null, opts.barInsertIndex);
+      } else {
+        appendBookmarkToBarRoot(bookmarkId);
+      }
     }
 
     const snapshot = await saveArchiveSnapshot(wc, bookmarkId);
@@ -350,13 +390,28 @@ export function listBarBookmarks(): Bookmark[] {
 export function setBookmarkOnBar(bookmarkId: number, onBar: boolean): boolean {
   const b = getBookmarkById(bookmarkId);
   if (!b) return false;
+  if (onBar) {
+    addBookmarkNode(bookmarkId, null);
+  } else {
+    const nodes = runQuery<{ id: number }>(
+      "SELECT id FROM bookmark_bar_nodes WHERE type = 'bookmark' AND bookmark_id = ?",
+      [bookmarkId]
+    );
+    for (const node of nodes) {
+      deleteNode(node.id);
+    }
+    syncBookmarkBarFlagOnly(bookmarkId, false);
+  }
+  return true;
+}
+
+function syncBookmarkBarFlagOnly(bookmarkId: number, onBar: boolean): void {
   runExec("UPDATE bookmarks SET on_bookmark_bar = ? WHERE id = ?", [onBar ? 1 : 0, bookmarkId]);
   saveDatabase();
-  return true;
 }
 
 export function addCurrentUrlToBar(url: string): boolean {
   const b = getBookmarkByUrl(url);
   if (!b) return false;
-  return setBookmarkOnBar(b.id, true);
+  return addBookmarkNode(b.id, null) != null;
 }

@@ -20,6 +20,7 @@ import {
 import { initFtsAvailability } from "./storage/history";
 import { onAppQuitVault } from "./storage/vault";
 import { initDownloads } from "./downloads/manager";
+import { clearBrowsingData } from "./site-data";
 import { initPermissionHandler } from "./permissions";
 import { initContextMenus } from "./context-menu";
 import { registerBrowserHandlers } from "./browser-handlers";
@@ -290,6 +291,13 @@ app.on("activate", () => {
 
 app.on("before-quit", () => {
   if (isQuittingForUpdate()) return;
+  const settings = getSettings();
+  if (settings.clear_cookies_on_exit) {
+    void clearBrowsingData({ cookies: true, storage: true });
+  }
+  if (settings.clear_cache_on_exit) {
+    void clearBrowsingData({ cache: true });
+  }
   purgeOnAppClose();
   sessionManager.flush(true);
   stopTabFreezer();

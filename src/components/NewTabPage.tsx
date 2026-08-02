@@ -29,13 +29,18 @@ export function NewTabPage({ onNavigate, onOpenSearch, onOpenLibrary }: NewTabPa
   const [query, setQuery] = useState("");
   const [links, setLinks] = useState<QuickLink[]>(DEFAULT_QUICK_LINKS);
   const [editing, setEditing] = useState(false);
+  const [showSearch, setShowSearch] = useState(true);
+  const [showQuickLinks, setShowQuickLinks] = useState(true);
   const [draftLabel, setDraftLabel] = useState("");
   const [draftUrl, setDraftUrl] = useState("");
   const salutation = useMemo(() => greeting(), []);
 
   useEffect(() => {
-    void window.inix?.settings.get().then((all) => {
-      if (all) setLinks(parseQuickLinks(all.new_tab_quick_links));
+    void window.inix?.settings.getFormatted().then((s) => {
+      if (!s) return;
+      setLinks(parseQuickLinks(JSON.stringify(s.new_tab_quick_links)));
+      setShowSearch(s.new_tab_show_search);
+      setShowQuickLinks(s.new_tab_show_quick_links);
     });
   }, []);
 
@@ -122,22 +127,25 @@ export function NewTabPage({ onNavigate, onOpenSearch, onOpenLibrary }: NewTabPa
           </div>
         </header>
 
-        <form className="new-tab-search" onSubmit={handleSubmit}>
-          <span className="new-tab-search-icon" aria-hidden="true">
-            ⌕
-          </span>
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Search, quick route, or URL"
-            autoFocus
-            spellCheck={false}
-          />
-          <kbd className="new-tab-search-hint">/</kbd>
-        </form>
-        <p className="new-tab-search-caption">Press Enter to go · / opens history search</p>
+        {showSearch && (
+          <>
+            <form className="new-tab-search" onSubmit={handleSubmit}>
+              <span className="new-tab-search-icon" aria-hidden="true">
+                ⌕
+              </span>
+              <input
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Search, quick route, or URL"
+                spellCheck={false}
+              />
+              <kbd className="new-tab-search-hint">/</kbd>
+            </form>
+            <p className="new-tab-search-caption">Press Enter to go · / opens history search</p>
+          </>
+        )}
 
         <div className="new-tab-actions">
           <button type="button" className="new-tab-action inix-btn-primary" onClick={onOpenLibrary}>
@@ -154,6 +162,7 @@ export function NewTabPage({ onNavigate, onOpenSearch, onOpenLibrary }: NewTabPa
           </button>
         </div>
 
+        {showQuickLinks && (
         <section className={`new-tab-shortcuts${editing ? " is-editing" : ""}`} aria-label="Quick links">
           <div className="new-tab-shortcuts-head">
             <p className="new-tab-shortcuts-label">Quick links</p>
@@ -291,6 +300,7 @@ export function NewTabPage({ onNavigate, onOpenSearch, onOpenLibrary }: NewTabPa
             </div>
           )}
         </section>
+        )}
       </div>
     </div>
   );

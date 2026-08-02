@@ -6,6 +6,8 @@ interface TabBarProps {
   activeTabId: string;
   onSelect: (id: string) => void;
   onClose: (id: string) => void;
+  onCloseOthers: (id: string) => void;
+  onCloseAll: () => void;
   onNewTab: () => void;
   onPin: (id: string) => void;
   onDuplicate: (id: string) => void;
@@ -17,6 +19,8 @@ export function TabBar({
   activeTabId,
   onSelect,
   onClose,
+  onCloseOthers,
+  onCloseAll,
   onNewTab,
   onPin,
   onDuplicate,
@@ -126,6 +130,24 @@ export function TabBar({
               }}
             >
               Close tab
+            </button>
+            <div className="tab-context-divider" role="separator" />
+            <button
+              disabled={tabs.length <= 1}
+              onClick={() => {
+                onCloseOthers(contextMenu.tabId);
+                setContextMenu(null);
+              }}
+            >
+              Close other tabs
+            </button>
+            <button
+              onClick={() => {
+                onCloseAll();
+                setContextMenu(null);
+              }}
+            >
+              Close all tabs
             </button>
           </menu>
         </>

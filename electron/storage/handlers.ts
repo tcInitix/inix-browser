@@ -1,4 +1,4 @@
-import { ipcMain } from "electron";
+import { ipcMain, BrowserWindow } from "electron";
 import {
   saveBookmarkFromTab,
   removeBookmark,
@@ -52,7 +52,19 @@ import { rebuildIndex } from "./vector-index";
 import { rebuildFtsIndex } from "./history";
 import { searchSemantic, searchRecent } from "./search";
 import { resetAiEngine } from "../ai/ai-engine";
-import { getSettings as getFormattedSettings } from "./settings";
+import {
+  getBarTree,
+  createFolder,
+  renameFolder,
+  deleteNode,
+  moveNode,
+  addBookmarkNode,
+  addUrlToBarTree,
+  importBarTree,
+  type ImportBarNode,
+} from "./bookmark-bar";
+import { getSettings as getFormattedSettings, syncStartupSettings } from "./settings";
+import { pickDownloadFolder, resolveDownloadDir } from "../downloads/manager";
 
 export function registerStorageHandlers(): void {
   ipcMain.handle("bookmarks:save-from-tab", async (_e, tabId: string, opts?: SaveBookmarkOptions) =>
@@ -78,6 +90,32 @@ export function registerStorageHandlers(): void {
     setBookmarkOnBar(id, onBar)
   );
   ipcMain.handle("bookmarks:add-url-to-bar", (_e, url: string) => addCurrentUrlToBar(url));
+
+  ipcMain.handle("bookmarks:list-bar-tree", () => getBarTree());
+  ipcMain.handle("bookmarks:bar-create-folder", (_e, title: string, parentId?: number | null) =>
+    createFolder(title, parentId ?? null)
+  );
+  ipcMain.handle("bookmarks:bar-rename-folder", (_e, nodeId: number, title: string) =>
+    renameFolder(nodeId, title)
+  );
+  ipcMain.handle("bookmarks:bar-delete-node", (_e, nodeId: number) => deleteNode(nodeId));
+  ipcMain.handle("bookmarks:bar-move-node", (_e, nodeId: number, parentId: number | null, index: number) =>
+    moveNode(nodeId, parentId, index)
+  );
+  ipcMain.handle(
+    "bookmarks:bar-add-bookmark",
+    (_e, bookmarkId: number, parentId?: number | null, insertIndex?: number) =>
+      addBookmarkNode(bookmarkId, parentId ?? null, insertIndex)
+  );
+  ipcMain.handle(
+    "bookmarks:bar-add-url",
+    (_e, url: string, parentId?: number | null, insertIndex?: number) =>
+      addUrlToBarTree(url, parentId ?? null, insertIndex)
+  );
+  ipcMain.handle("bookmarks:bar-import-tree", (_e, nodes: ImportBarNode[], replace?: boolean) => {
+    importBarTree(nodes, replace !== false);
+    return true;
+  });
 
   ipcMain.handle("aliases:list", () => listAliases());
   ipcMain.handle("aliases:set", (_e, alias: string, url: string, title?: string) =>
@@ -167,6 +205,10 @@ export function registerStorageHandlers(): void {
   ipcMain.handle("settings:get", () => getAllSettings());
   ipcMain.handle("settings:set", (_e, key: string, value: string) => {
     setSetting(key, value);
+    if (key === "startup_mode") {
+      const mode = value as "restore" | "new_tab" | "homepage" | "urls";
+      syncStartupSettings(mode);
+    }
     if (
       key === "engine_host" ||
       key === "ollama_host" ||
@@ -190,6 +232,11 @@ export function registerStorageHandlers(): void {
     return true;
   });
   ipcMain.handle("settings:get-formatted", () => getFormattedSettings());
+  ipcMain.handle("settings:pick-download-folder", async (e) => {
+    const win = BrowserWindow.fromWebContents(e.sender);
+    return pickDownloadFolder(win && !win.isDestroyed() ? win : null);
+  });
+  ipcMain.handle("settings:default-download-path", () => resolveDownloadDir());
 
   ipcMain.handle("search:semantic", (_e, query: string, limit?: number) =>
     searchSemantic(query, limit)
