@@ -1,4 +1,7 @@
 import { app } from "electron";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { autoUpdater } from "electron-updater";
 import type { BrowserWindow as BrowserWindowType } from "electron";
 import {
@@ -103,6 +106,35 @@ export function initAutoUpdater(windowGetter: () => BrowserWindowType | null): v
 
 export function getAppVersion(): string {
   return app.getVersion();
+}
+
+function projectRoot(): string {
+  return path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
+}
+
+/** Release notes shipped with this build (for Settings → About). */
+export function getBundledReleaseNotes(): string | null {
+  const version = getAppVersion();
+  const root = projectRoot();
+  const candidates = [
+    path.join(app.getAppPath(), "dist", "release-notes.md"),
+    path.join(app.getAppPath(), "release-notes.md"),
+    path.join(root, "public", "release-notes.md"),
+    path.join(root, "release-notes", `v${version}.md`),
+    path.join(root, "release-notes", "publish.md"),
+  ];
+
+  for (const filePath of candidates) {
+    try {
+      if (fs.existsSync(filePath)) {
+        const text = fs.readFileSync(filePath, "utf8").trim();
+        if (text) return text;
+      }
+    } catch {
+      // try next candidate
+    }
+  }
+  return null;
 }
 
 export function isUpdateSupported(): boolean {

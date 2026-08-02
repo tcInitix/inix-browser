@@ -45,7 +45,6 @@ export function UpdatePrompt({ state, onDownload, onInstall, onDismiss }: Update
       <DismissibleOverlay passive>
         <div className="permission-prompt update-prompt update-prompt-compact">
           <header className="update-prompt-header">
-            <span className="update-prompt-badge">Updating</span>
             <h3>Downloading update…</h3>
           </header>
           <div className="update-progress-track">

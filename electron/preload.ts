@@ -199,6 +199,7 @@ contextBridge.exposeInMainWorld("inix", {
   },
   update: {
     version: () => ipcRenderer.invoke("update:version") as Promise<string>,
+    bundledNotes: () => ipcRenderer.invoke("update:bundled-notes") as Promise<string | null>,
     supported: () => ipcRenderer.invoke("update:supported") as Promise<boolean>,
     check: () => ipcRenderer.invoke("update:check") as Promise<{ ok: boolean; error?: string }>,
     download: () => ipcRenderer.invoke("update:download") as Promise<{ ok: boolean; error?: string }>,

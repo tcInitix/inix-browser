@@ -35,6 +35,7 @@ import {
 import {
   initAutoUpdater,
   getAppVersion,
+  getBundledReleaseNotes,
   isUpdateSupported,
   checkForUpdatesManual,
   downloadUpdate,
@@ -266,6 +267,7 @@ function registerMainIpcHandlers() {
   });
 
   ipcMain.handle("update:version", () => getAppVersion());
+  ipcMain.handle("update:bundled-notes", () => getBundledReleaseNotes());
   ipcMain.handle("update:supported", () => isUpdateSupported());
   ipcMain.handle("update:check", () => checkForUpdatesManual());
   ipcMain.handle("update:download", () => downloadUpdate());

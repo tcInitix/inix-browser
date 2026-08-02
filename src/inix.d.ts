@@ -327,6 +327,7 @@ export interface InixAPI {
   };
   update: {
     version: () => Promise<string>;
+    bundledNotes: () => Promise<string | null>;
     supported: () => Promise<boolean>;
     check: () => Promise<{ ok: boolean; error?: string }>;
     download: () => Promise<{ ok: boolean; error?: string }>;

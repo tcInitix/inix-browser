@@ -9,7 +9,8 @@ import {
 import { VaultUnlockModal } from "./VaultUnlockModal";
 import { Switch } from "./Switch";
 import { serializePanicUrls, normalizePanicUrls } from "../utils/panic";
-import { friendlyUpdateError } from "../utils/update-text";
+import { friendlyUpdateError, isTechnicalUpdateDump, prepareReleaseNotes } from "../utils/update-text";
+import { MarkdownText } from "./MarkdownText";
 import type { InixSettings } from "../inix.d";
 import {
   AppearanceSettingsSection,
@@ -225,6 +226,7 @@ export function SettingsPage({
   const [browserProfiles, setBrowserProfiles] = useState<BrowserProfile[]>([]);
   const [newProfileName, setNewProfileName] = useState("");
   const [appVersion, setAppVersion] = useState("");
+  const [bundledReleaseNotes, setBundledReleaseNotes] = useState<string | null>(null);
   const [updateMessage, setUpdateMessage] = useState<string | null>(null);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [chromeProfiles, setChromeProfiles] = useState<ChromeProfileOption[]>([]);
@@ -279,6 +281,7 @@ export function SettingsPage({
     void window.inix?.aliases.list().then(setAliases);
     void window.inix?.vault.isConfigured().then(setVaultConfigured);
     void window.inix?.update.version().then((v) => setAppVersion(v ?? ""));
+    void window.inix?.update.bundledNotes().then((notes) => setBundledReleaseNotes(notes ?? null));
     void refreshEngineStatus();
   }, [refreshEngineStatus]);
 
@@ -654,6 +657,13 @@ export function SettingsPage({
 
   const activeNav = NAV.find((item) => item.id === section);
 
+  const aboutReleaseNotes = useMemo(() => {
+    if (!bundledReleaseNotes?.trim() || !appVersion) return null;
+    if (isTechnicalUpdateDump(bundledReleaseNotes)) return null;
+    const prepared = prepareReleaseNotes(bundledReleaseNotes.trim(), appVersion);
+    return prepared || null;
+  }, [appVersion, bundledReleaseNotes]);
+
   return (
     <div className="settings-page inix-page">
       <aside className="settings-sidebar">
@@ -736,6 +746,16 @@ export function SettingsPage({
                 <p className="settings-note">
                   Current version: <strong>{appVersion || "…"}</strong>
                 </p>
+
+                {aboutReleaseNotes && (
+                  <div className="settings-release-notes">
+                    <p className="settings-subhead-inline">What&apos;s in this version</p>
+                    <section className="update-release-notes" aria-label="Release notes">
+                      <MarkdownText text={aboutReleaseNotes} />
+                    </section>
+                  </div>
+                )}
+
                 <div className="settings-action-row">
                   <button
                     type="button"

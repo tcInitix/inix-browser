@@ -20,6 +20,7 @@ import { UpdatePrompt, type UpdateState } from "./components/UpdatePrompt";
 import { OnboardingFlow, type OnboardingResult } from "./components/OnboardingFlow";
 import { BootSplash } from "./components/BootSplash";
 import { PanicSetup } from "./components/PanicSetup";
+import { StatusBar } from "./components/StatusBar";
 import type { PermissionRequest, InixSettings } from "./inix.d";
 import { parsePanicUrls, serializePanicUrls, normalizePanicUrls } from "./utils/panic";
 import { applyFontScale, applyThemeMode, watchSystemTheme } from "./utils/apply-appearance";
@@ -1067,28 +1068,15 @@ export default function App() {
           onInjectConsumed={() => setAiInject(null)}
         />
       </div>
-      <footer className="status-bar">
-        {activeTab.private || privateWindow ? (
-          <>
-            <span className="privacy-badge private-tab-badge">
-              {privateWindow ? "Private window" : "Private tab"}
-            </span>
-            <span className="status-divider" />
-            <span className="status-text">History not saved · Tracker blocking active</span>
-          </>
-        ) : (
-          <>
-            <span className="privacy-badge">Private</span>
-            <span className="status-divider" />
-            <span className="status-text">
-              Tracker blocking active · Inix AI local
-              {activeTab.zoomLevel != null && activeTab.zoomLevel !== 0 && (
-                <> · Zoom {Math.round(Math.pow(1.2, activeTab.zoomLevel) * 100)}%</>
-              )}
-            </span>
-          </>
-        )}
-      </footer>
+      <StatusBar
+        isPrivate={!!(activeTab?.private || privateWindow)}
+        privateLabel={
+          privateWindow ? "Private window" : activeTab?.private ? "Private tab" : undefined
+        }
+        zoomLevel={activeTab?.zoomLevel}
+        frozen={activeTab?.frozen}
+        onOpenSettings={() => navigate("inix://settings")}
+      />
 
       {readerContent && (
         <ReaderView
