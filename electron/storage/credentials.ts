@@ -95,11 +95,13 @@ export function saveCredential(
   origin: string,
   username: string,
   password: string,
-  title: string
+  title: string,
+  options?: { persist?: boolean }
 ): number {
   requireUnlocked();
   const now = Date.now();
   const payload = encryptVaultPayload({ username, password, origin, title });
+  const persist = options?.persist !== false;
 
   const existing = runQuery<{ id: number }>(
     "SELECT id FROM vault_credentials WHERE origin = ? AND username_hint = ? LIMIT 1",
@@ -111,7 +113,7 @@ export function saveCredential(
       "UPDATE vault_credentials SET payload = ?, title = ?, updated_at = ? WHERE id = ?",
       [payload, title, now, existing[0].id]
     );
-    saveDatabase();
+    if (persist) saveDatabase();
     return existing[0].id;
   }
 
@@ -120,7 +122,7 @@ export function saveCredential(
     [origin, username, title, payload, now, now]
   );
   const id = lastInsertId();
-  saveDatabase();
+  if (persist) saveDatabase();
   return id;
 }
 

@@ -215,6 +215,7 @@ export function SettingsPage({
   const [vaultModalOpen, setVaultModalOpen] = useState(false);
   const [vaultUnlockOpen, setVaultUnlockOpen] = useState(false);
   const pendingAutofillAdd = useRef(false);
+  const pendingPasswordImport = useRef<{ pickCsv: boolean } | null>(null);
   const [vaultChangeOpen, setVaultChangeOpen] = useState(false);
   const [oldVaultPw, setOldVaultPw] = useState("");
   const [newVaultPw, setNewVaultPw] = useState("");
@@ -328,13 +329,15 @@ export function SettingsPage({
   };
 
   const refreshVaultData = useCallback(async () => {
-    const [configured, creds] = await Promise.all([
+    const [configured, unlocked, creds] = await Promise.all([
       window.inix?.vault.isConfigured(),
+      window.inix?.vault.isUnlocked(),
       window.inix?.vault.isUnlocked().then((isUnlocked) =>
         isUnlocked ? window.inix?.credentials.list() : []
       ),
     ]);
     if (configured != null) setVaultConfigured(configured);
+    setVaultUnlocked(!!unlocked);
     if (creds) setSavedCredentials(creds as StoredCredential[]);
   }, []);
 
@@ -419,17 +422,24 @@ export function SettingsPage({
 
   const importChromePasswords = async (pickCsv = false) => {
     setImportMessage(null);
-    const unlocked = await window.inix?.vault.isUnlocked();
+    const [configured, unlocked] = await Promise.all([
+      window.inix?.vault.isConfigured(),
+      window.inix?.vault.isUnlocked(),
+    ]);
+
+    if (!configured) {
+      setImportMessage("Set up the vault before importing passwords.");
+      pendingPasswordImport.current = { pickCsv };
+      setVaultModalOpen(true);
+      return;
+    }
     if (!unlocked) {
       setImportMessage("Unlock the vault before importing passwords.");
-      setVaultModalOpen(true);
+      pendingPasswordImport.current = { pickCsv };
+      setVaultUnlockOpen(true);
       return;
     }
-    if (!vaultConfigured) {
-      setImportMessage("Set up the vault before importing passwords.");
-      setVaultModalOpen(true);
-      return;
-    }
+
     setImportingPasswords(true);
     try {
       const result = pickCsv
@@ -1760,17 +1770,26 @@ export function SettingsPage({
       <VaultUnlockModal
         open={vaultModalOpen}
         setupMode
-        onClose={() => setVaultModalOpen(false)}
+        onClose={() => {
+          pendingPasswordImport.current = null;
+          setVaultModalOpen(false);
+        }}
         onUnlocked={() => {
           setVaultConfigured(true);
           setVaultUnlocked(true);
           void refreshVaultData();
+          const pending = pendingPasswordImport.current;
+          if (pending) {
+            pendingPasswordImport.current = null;
+            void importChromePasswords(pending.pickCsv);
+          }
         }}
       />
       <VaultUnlockModal
         open={vaultUnlockOpen}
         onClose={() => {
           pendingAutofillAdd.current = false;
+          pendingPasswordImport.current = null;
           setVaultUnlockOpen(false);
         }}
         onUnlocked={() => {
@@ -1781,6 +1800,11 @@ export function SettingsPage({
           if (pendingAutofillAdd.current) {
             pendingAutofillAdd.current = false;
             void createAutofillProfile();
+          }
+          const pending = pendingPasswordImport.current;
+          if (pending) {
+            pendingPasswordImport.current = null;
+            void importChromePasswords(pending.pickCsv);
           }
         }}
       />

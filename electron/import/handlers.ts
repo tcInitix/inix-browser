@@ -85,7 +85,7 @@ export function registerImportHandlers(): void {
       return { ok: false, canceled: true };
     }
     try {
-      const imported = importPasswordsFromCsvFile(result.filePaths[0]);
+      const imported = await importPasswordsFromCsvFile(result.filePaths[0]);
       return { ok: true, ...imported };
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) };
