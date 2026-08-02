@@ -7,6 +7,7 @@ Var pid
 
 ; Kill the full Inix process tree (main + GPU/utility/renderer children).
 !macro inixForceCloseAppImpl
+  ${GetProcessInfo} 0 $pid $1 $2 $3 $4
   DetailPrint "Closing all ${PRODUCT_NAME} processes..."
   !ifdef INSTALL_MODE_PER_ALL_USERS
     nsExec::Exec `taskkill /im "${PRODUCT_FILENAME}.exe" /fi "PID ne $pid" /t`
@@ -63,7 +64,6 @@ Var pid
 !macroend
 
 !ifndef BUILD_UNINSTALLER
-  ; #region agent log — install debug log ($TEMP\inix-debug-7afe24.log)
   Function inixWriteDebugLog
     Exch $0
     Push $1
@@ -143,10 +143,8 @@ Var pid
     Call inixWriteDebugLog
     inixCustomUnInstallCheckDone:
   FunctionEnd
-  ; #endregion
 !endif
 
-; Show the details console on the Installing page (electron-builder hides it by default).
 ShowUninstDetails show
 !define MUI_UNINSTFILESPAGE_SHOWDETAILS
 !define MUI_UNINSTFILESPAGE_SHOWDETAILSCONTROL
@@ -186,30 +184,21 @@ ShowUninstDetails show
   !insertmacro MUI_UNPAGE_WELCOME
 !macroend
 
+; Install/update: use electron-builder's default close/retry dialog (no preInit kill).
+; Uninstall: force-kill the full process tree before file removal.
 !macro customCheckAppRunning
   SetDetailsPrint both
   DetailPrint "Checking for running ${PRODUCT_NAME}..."
-  !insertmacro inixForceCloseAppCall
-  !ifndef BUILD_UNINSTALLER
-    Push "H2:check-app-running start"
-    Call inixWriteDebugLog
+  !ifdef BUILD_UNINSTALLER
+    !insertmacro inixForceCloseAppCall
   !endif
-  ; Use electron-builder's default close/retry logic (PID-safe, per-user aware).
   !insertmacro _CHECK_APP_RUNNING
   !ifndef BUILD_UNINSTALLER
-    Push "H2:check-app-running done"
-    Call inixWriteDebugLog
     DetailPrint "Ready to install ${PRODUCT_NAME} ${VERSION}."
   !endif
 !macroend
 
 !ifndef BUILD_UNINSTALLER
-  !macro preInit
-    !insertmacro inixForceCloseAppCall
-    Push "H0:preInit version=${VERSION}"
-    Call inixWriteDebugLog
-  !macroend
-
   !macro customUnInstallCheck
     Call inixCustomUnInstallCheck
   !macroend
@@ -237,11 +226,9 @@ ShowUninstDetails show
   DetailPrint "Creating Start Menu shortcut..."
   DetailPrint "Creating desktop shortcut (if enabled)..."
   DetailPrint "Registering uninstall information..."
-  ; Update mode stages the previous version under $PLUGINSDIR\old-install — remove it.
   DetailPrint "Cleaning up files from the previous version..."
   ClearErrors
   RMDir /r "$PLUGINSDIR\old-install"
-  ; Older uninstallers may leave staging folders in other NSIS temp dirs after an update.
   nsExec::ExecToLog `$SYSDIR\cmd.exe /c for /d %G in ("%TEMP%\nsm*.tmp") do @if exist "%G\old-install" rd /s /q "%G\old-install"`
   DetailPrint "${PRODUCT_NAME} ${VERSION} installed successfully."
 !macroend
@@ -257,7 +244,6 @@ ShowUninstDetails show
   !insertmacro inixForceCloseAppCall
   DetailPrint "Removing ${PRODUCT_NAME} shortcuts..."
   DetailPrint "Removing program files..."
-  ; During in-place updates, files are moved here first — delete the staged copy.
   DetailPrint "Removing staged application files..."
   ClearErrors
   RMDir /r "$PLUGINSDIR\old-install"
