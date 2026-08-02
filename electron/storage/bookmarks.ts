@@ -360,6 +360,27 @@ export function removeBookmark(url: string): void {
   saveDatabase();
 }
 
+export function clearAllBookmarks(): void {
+  const rows = runQuery<{ snapshot_path: string }>(
+    "SELECT snapshot_path FROM bookmarks WHERE snapshot_path IS NOT NULL AND snapshot_path != ''"
+  );
+  for (const row of rows) {
+    if (row.snapshot_path && fs.existsSync(row.snapshot_path)) {
+      try {
+        fs.unlinkSync(row.snapshot_path);
+      } catch {
+        // ignore
+      }
+    }
+  }
+  runExec("DELETE FROM bookmark_bar_nodes");
+  runExec("DELETE FROM workspace_pins");
+  runExec("DELETE FROM bookmark_tags");
+  runExec("DELETE FROM bookmarks");
+  runExec("DELETE FROM embeddings WHERE source_type = 'bookmark'");
+  saveDatabase();
+}
+
 export function listBookmarks(filter: BookmarkFilter = {}): Bookmark[] {
   let sql = "SELECT DISTINCT b.* FROM bookmarks b";
   const params: (string | number)[] = [];

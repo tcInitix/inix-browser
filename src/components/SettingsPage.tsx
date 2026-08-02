@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { EngineStatus, UrlAlias, SiteRecord, PermissionGrant, ImportResult } from "../inix.d";
 import { RECOMMENDED_CHAT_MODELS, SUGGESTED_CHAT_MODEL } from "../constants/recommended-models";
 import {
@@ -131,6 +131,7 @@ interface SettingsPageProps {
   onBookmarkBarChange?: (enabled: boolean) => void;
   onRestoreTabsChange?: (enabled: boolean) => void;
   onSettingsApplied?: (settings: InixSettings) => void;
+  onFactoryReset?: () => void;
 }
 
 const NAV: { id: SettingsSection; label: string; icon: string }[] = [
@@ -156,6 +157,7 @@ export function SettingsPage({
   onBookmarkBarChange,
   onRestoreTabsChange,
   onSettingsApplied,
+  onFactoryReset,
 }: SettingsPageProps) {
   const [section, setSection] = useState<SettingsSection>("general");
   const [aiProvider, setAiProvider] = useState<AiProvider>("local");
@@ -187,7 +189,10 @@ export function SettingsPage({
   const [newAliasTitle, setNewAliasTitle] = useState("");
   const [saved, setSaved] = useState(false);
   const [vaultConfigured, setVaultConfigured] = useState(false);
+  const [vaultUnlocked, setVaultUnlocked] = useState(false);
   const [vaultModalOpen, setVaultModalOpen] = useState(false);
+  const [vaultUnlockOpen, setVaultUnlockOpen] = useState(false);
+  const pendingAutofillAdd = useRef(false);
   const [vaultChangeOpen, setVaultChangeOpen] = useState(false);
   const [oldVaultPw, setOldVaultPw] = useState("");
   const [newVaultPw, setNewVaultPw] = useState("");
@@ -310,6 +315,8 @@ export function SettingsPage({
   }, []);
 
   const refreshAutofill = useCallback(async () => {
+    const unlocked = await window.inix?.vault.isUnlocked();
+    setVaultUnlocked(!!unlocked);
     const profiles = await window.inix?.autofill.profiles();
     if (!profiles) return;
     setAutofillProfiles(profiles as AutofillProfileMeta[]);
@@ -320,8 +327,27 @@ export function SettingsPage({
       const meta = (profiles as AutofillProfileMeta[]).find((p) => p.id === activeId);
       if (meta) setAutofillLabel(meta.label);
       if (data) setAutofillForm({ ...EMPTY_AUTOFILL, ...(data as Partial<AutofillFormData>) });
+    } else {
+      setAutofillLabel("");
+      setAutofillForm(EMPTY_AUTOFILL);
     }
   }, [selectedAutofillId]);
+
+  const createAutofillProfile = useCallback(async () => {
+    const unlocked = await window.inix?.vault.isUnlocked();
+    if (!unlocked) {
+      pendingAutofillAdd.current = true;
+      setVaultUnlockOpen(true);
+      return;
+    }
+    const result = await window.inix?.autofill.createProfile("New profile");
+    if (result?.ok && result.profile) {
+      setSelectedAutofillId(result.profile.id);
+      await refreshAutofill();
+      return;
+    }
+    alert(result?.error ?? "Could not create autofill profile. Unlock the vault and try again.");
+  }, [refreshAutofill]);
 
   const refreshBrowserProfiles = useCallback(async () => {
     const list = await window.inix?.profiles.list();
@@ -567,6 +593,30 @@ export function SettingsPage({
     if (confirm("Clear all Inix history, saved pages, and search index?")) {
       await window.inix?.storage.historyClear();
     }
+  };
+
+  const clearAllBookmarks = async () => {
+    if (
+      confirm(
+        "Remove all bookmarks from your library and bookmarks bar? Workspace pins are cleared too. This cannot be undone."
+      )
+    ) {
+      await window.inix?.bookmarks.clearAll();
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    }
+  };
+
+  const factoryReset = async () => {
+    if (
+      !confirm(
+        "Reset Inix to a fresh start?\n\nThis deletes:\n• All bookmarks and library data\n• All browsing history\n• Vault passwords and saved logins\n• Extra browser profiles (default profile kept, emptied)\n• Cookies, cache, and site data\n• Quick routes and workspaces\n\nYou will go through setup again. Close other Inix windows first."
+      )
+    ) {
+      return;
+    }
+    await window.inix?.app.factoryReset();
+    onFactoryReset?.();
   };
 
   const rebuildIndex = async () => {
@@ -1256,6 +1306,19 @@ export function SettingsPage({
               </div>
               {!vaultConfigured ? (
                 <p className="settings-note">Set up the vault first to store autofill profiles.</p>
+              ) : !vaultUnlocked ? (
+                <>
+                  <p className="settings-note">
+                    Unlock the vault to add or edit encrypted autofill profiles.
+                  </p>
+                  <button
+                    type="button"
+                    className="settings-primary-btn"
+                    onClick={() => setVaultUnlockOpen(true)}
+                  >
+                    Unlock vault
+                  </button>
+                </>
               ) : (
                 <>
                   <div className="settings-inline-toolbar">
@@ -1264,7 +1327,7 @@ export function SettingsPage({
                       value={selectedAutofillId ?? ""}
                       onChange={(e) => {
                         const id = parseInt(e.target.value, 10);
-                        setSelectedAutofillId(id);
+                        setSelectedAutofillId(Number.isFinite(id) ? id : null);
                         void refreshAutofill();
                       }}
                     >
@@ -1283,9 +1346,7 @@ export function SettingsPage({
                     <button
                       type="button"
                       className="settings-primary-btn"
-                      onClick={() =>
-                        void window.inix?.autofill.createProfile("New profile").then(() => refreshAutofill())
-                      }
+                      onClick={() => void createAutofillProfile()}
                     >
                       Add profile
                     </button>
@@ -1430,9 +1491,16 @@ export function SettingsPage({
                         <button
                           type="button"
                           className="alias-remove"
-                          onClick={() =>
-                            void window.inix?.profiles.delete(p.id).then(() => refreshBrowserProfiles())
-                          }
+                          onClick={() => {
+                            if (
+                              !confirm(
+                                `Delete profile "${p.name}"? Its cookies, cache, and site data on this device will be erased.`
+                              )
+                            ) {
+                              return;
+                            }
+                            void window.inix?.profiles.delete(p.id).then(() => refreshBrowserProfiles());
+                          }}
                         >
                           ✕
                         </button>
@@ -1443,6 +1511,18 @@ export function SettingsPage({
                   </li>
                 ))}
               </ul>
+              <div className="settings-card-head" style={{ marginTop: 24 }}>
+                <div>
+                  <h2>Start over</h2>
+                  <p>
+                    Delete all extra profiles, wipe local data, and run first-time setup again. The default
+                    profile is kept but emptied.
+                  </p>
+                </div>
+              </div>
+              <button type="button" className="settings-danger-btn" onClick={() => void factoryReset()}>
+                Reset Inix &amp; run setup again
+              </button>
             </section>
           )}
 
@@ -1548,6 +1628,9 @@ export function SettingsPage({
                 <button type="button" className="settings-secondary-btn" onClick={rebuildIndex}>
                   Rebuild search index
                 </button>
+                <button type="button" className="settings-danger-btn" onClick={() => void clearAllBookmarks()}>
+                  Clear all bookmarks
+                </button>
                 <button type="button" className="settings-danger-btn" onClick={() => void clearHistory()}>
                   Clear all history
                 </button>
@@ -1609,7 +1692,25 @@ export function SettingsPage({
         onClose={() => setVaultModalOpen(false)}
         onUnlocked={() => {
           setVaultConfigured(true);
+          setVaultUnlocked(true);
           void refreshVaultData();
+        }}
+      />
+      <VaultUnlockModal
+        open={vaultUnlockOpen}
+        onClose={() => {
+          pendingAutofillAdd.current = false;
+          setVaultUnlockOpen(false);
+        }}
+        onUnlocked={() => {
+          setVaultUnlocked(true);
+          setVaultUnlockOpen(false);
+          void refreshVaultData();
+          void refreshAutofill();
+          if (pendingAutofillAdd.current) {
+            pendingAutofillAdd.current = false;
+            void createAutofillProfile();
+          }
         }}
       />
     </div>

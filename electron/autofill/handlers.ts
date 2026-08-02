@@ -21,11 +21,10 @@ import {
   listProfiles,
   createProfile,
   renameProfile,
-  deleteProfile,
+  deleteProfileWithData,
   getProfile,
 } from "../profiles/manager";
 import { getSettings } from "../storage/settings";
-import { isVaultConfigured, isVaultUnlocked } from "../storage/vault";
 
 export function registerAutofillHandlers(
   createProfileWindow: (profileId: string) => BrowserWindow
@@ -38,7 +37,6 @@ export function registerAutofillHandlers(
     ) => {
       if (!payload.origin || !payload.username || !payload.password) return;
       if (!getSettings().offer_save_passwords) return;
-      if (!isVaultConfigured() || !isVaultUnlocked()) return;
       if (credentialExists(payload.origin, payload.username)) return;
 
       const tabId = tabManager.getTabIdForWebContents(e.sender.id);
@@ -123,7 +121,7 @@ export function registerAutofillHandlers(
   ipcMain.handle("profiles:rename", (_e, id: string, name: string) =>
     renameProfile(id, name)
   );
-  ipcMain.handle("profiles:delete", (_e, id: string) => deleteProfile(id));
+  ipcMain.handle("profiles:delete", async (_e, id: string) => deleteProfileWithData(id));
   ipcMain.handle("profiles:open-window", (_e, profileId: string) => {
     createProfileWindow(profileId);
     return true;

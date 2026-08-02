@@ -22,6 +22,13 @@ export function getProfilePartition(profileId: string): string {
   return `persist:inix-profile-${profileId}`;
 }
 
+export async function clearProfileSessionData(profileId: string): Promise<void> {
+  const partition = getProfilePartition(profileId);
+  const sess = session.fromPartition(partition);
+  await sess.clearCache();
+  await sess.clearStorageData();
+}
+
 export function getAllProfilePartitions(): string[] {
   const profiles = listProfiles();
   return profiles.map((p) => getProfilePartition(p.id));
@@ -66,6 +73,12 @@ export function renameProfile(id: string, name: string): boolean {
   runExec("UPDATE browser_profiles SET name = ? WHERE id = ?", [name.trim(), id]);
   saveDatabase();
   return true;
+}
+
+export async function deleteProfileWithData(id: string): Promise<boolean> {
+  if (id === DEFAULT_PROFILE_ID) return false;
+  await clearProfileSessionData(id);
+  return deleteProfile(id);
 }
 
 export function deleteProfile(id: string): boolean {

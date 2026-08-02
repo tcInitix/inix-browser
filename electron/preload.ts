@@ -310,6 +310,7 @@ contextBridge.exposeInMainWorld("inix", {
       }
     ) => ipcRenderer.invoke("bookmarks:save-from-tab", tabId, opts),
     remove: (url: string) => ipcRenderer.invoke("bookmarks:remove", url),
+    clearAll: () => ipcRenderer.invoke("bookmarks:clear-all") as Promise<boolean>,
     list: (filter?: { tags?: string[]; workspaceId?: number; query?: string }) =>
       ipcRenderer.invoke("bookmarks:list", filter),
     get: (id: number) => ipcRenderer.invoke("bookmarks:get", id),
@@ -435,5 +436,8 @@ contextBridge.exposeInMainWorld("inix", {
       ipcRenderer.on("relay:status", handler);
       return () => ipcRenderer.removeListener("relay:status", handler);
     },
+  },
+  app: {
+    factoryReset: () => ipcRenderer.invoke("app:factory-reset") as Promise<boolean>,
   },
 });

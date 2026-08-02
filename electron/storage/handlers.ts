@@ -2,6 +2,7 @@ import { ipcMain, BrowserWindow } from "electron";
 import {
   saveBookmarkFromTab,
   removeBookmark,
+  clearAllBookmarks,
   listBookmarks,
   getBookmarkById,
   isBookmarked,
@@ -70,6 +71,7 @@ import {
 } from "./bookmark-bar";
 import { getSettings as getFormattedSettings, syncStartupSettings } from "./settings";
 import { pickDownloadFolder, resolveDownloadDir } from "../downloads/manager";
+import { factoryResetApp } from "./app-reset";
 
 export function registerStorageHandlers(): void {
   ipcMain.handle("bookmarks:save-from-tab", async (_e, tabId: string, opts?: SaveBookmarkOptions) =>
@@ -77,6 +79,10 @@ export function registerStorageHandlers(): void {
   );
   ipcMain.handle("bookmarks:remove", (_e, url: string) => {
     removeBookmark(url);
+    return true;
+  });
+  ipcMain.handle("bookmarks:clear-all", () => {
+    clearAllBookmarks();
     return true;
   });
   ipcMain.handle("bookmarks:list", (_e, filter?: BookmarkFilter) => listBookmarks(filter ?? {}));
@@ -264,6 +270,11 @@ export function registerStorageHandlers(): void {
     searchSemantic(query, limit)
   );
   ipcMain.handle("search:recent", (_e, limit?: number) => searchRecent(limit));
+
+  ipcMain.handle("app:factory-reset", async () => {
+    await factoryResetApp();
+    return true;
+  });
 }
 
 export function initStorageDefaults(): void {

@@ -383,6 +383,7 @@ export interface InixAPI {
       }
     ) => Promise<{ ok: boolean; bookmark?: Bookmark; error?: string }>;
     remove: (url: string) => Promise<boolean>;
+    clearAll: () => Promise<boolean>;
     list: (filter?: { tags?: string[]; workspaceId?: number; query?: string }) => Promise<Bookmark[]>;
     get: (id: number) => Promise<Bookmark | null>;
     check: (url: string) => Promise<boolean>;
@@ -486,6 +487,9 @@ export interface InixAPI {
     test: () => Promise<RelayState>;
     setConnectOnStartup: (enabled: boolean) => Promise<boolean>;
     onStatus: (callback: (state: RelayState) => void) => () => void;
+  };
+  app: {
+    factoryReset: () => Promise<boolean>;
   };
 }
 

@@ -14,6 +14,7 @@ import { DownloadsPanel } from "./components/DownloadsPanel";
 import { ReaderView } from "./components/ReaderView";
 import { PermissionPrompt } from "./components/PermissionPrompt";
 import { SavePasswordPrompt, type SavePasswordOffer } from "./components/SavePasswordPrompt";
+import { VaultUnlockModal } from "./components/VaultUnlockModal";
 import { BookmarkBar } from "./components/BookmarkBar";
 import { UpdatePrompt, type UpdateState } from "./components/UpdatePrompt";
 import { OnboardingFlow, type OnboardingResult } from "./components/OnboardingFlow";
@@ -61,6 +62,8 @@ export default function App() {
   const [readerContent, setReaderContent] = useState<{ title: string; url: string; text: string } | null>(null);
   const [permissionRequest, setPermissionRequest] = useState<PermissionRequest | null>(null);
   const [savePasswordOffer, setSavePasswordOffer] = useState<SavePasswordOffer | null>(null);
+  const [vaultUnlockForSave, setVaultUnlockForSave] = useState(false);
+  const pendingSavePassword = useRef<SavePasswordOffer | null>(null);
   const [immersive, setImmersive] = useState(false);
   const [privateWindow, setPrivateWindow] = useState(false);
   const [bookmarkBarEnabled, setBookmarkBarEnabled] = useState(false);
@@ -101,6 +104,7 @@ export default function App() {
     panicSetupOpen ||
     !!permissionRequest ||
     !!savePasswordOffer ||
+    vaultUnlockForSave ||
     updateState.status === "downloading" ||
     !!readerContent ||
     searchOpen ||
@@ -261,6 +265,28 @@ export default function App() {
     await window.inix?.chrome.setBookmarkBar(result.bookmarkBar);
     setOnboardingOpen(false);
     showToast("Welcome to Inix");
+  }, []);
+
+  const handleFactoryReset = useCallback(() => {
+    const b = browser();
+    for (const tab of tabsRef.current) {
+      b?.destroyTab(tab.id);
+      initialized.current.delete(tab.id);
+    }
+    closedTabs.current = [];
+    realSessionRef.current = null;
+    setPanicMode(false);
+    setAliasMap({});
+    setBookmarkBarEnabled(false);
+    void window.inix?.chrome.setBookmarkBar(false);
+    const tab = createTab();
+    initialized.current.clear();
+    initialized.current.add(tab.id);
+    setTabs([tab]);
+    setActiveTabId(tab.id);
+    setOnboardingOpen(true);
+    b?.hide();
+    showToast("Inix reset — complete setup to continue");
   }, []);
 
   useEffect(() => {
@@ -824,6 +850,30 @@ export default function App() {
     return () => unsub?.();
   }, []);
 
+  const persistSavePasswordOffer = useCallback(async (offer: SavePasswordOffer) => {
+    const configured = await window.inix?.vault.isConfigured();
+    if (!configured) {
+      showToast("Set up the vault in Settings → Vault to save passwords");
+      setSavePasswordOffer(null);
+      return;
+    }
+    const unlocked = await window.inix?.vault.isUnlocked();
+    if (!unlocked) {
+      pendingSavePassword.current = offer;
+      setVaultUnlockForSave(true);
+      return;
+    }
+    const result = await window.inix?.autofill.saveCredential({
+      origin: offer.origin,
+      username: offer.username,
+      password: offer.password,
+      title: offer.title,
+    });
+    setSavePasswordOffer(null);
+    if (result?.ok) showToast("Password saved to vault");
+    else showToast(result?.error ?? "Could not save password");
+  }, []);
+
   useEffect(() => {
     const unsubRequest = window.inix?.permission.onRequest((req) => setPermissionRequest(req));
     const unsubDismiss = window.inix?.permission.onDismiss(({ id }) => {
@@ -901,6 +951,7 @@ export default function App() {
           onBookmarkBarChange={setBookmarkBarEnabled}
           onRestoreTabsChange={setRestoreTabsOnLaunch}
           onSettingsApplied={applyRuntimeSettings}
+          onFactoryReset={handleFactoryReset}
         />
       );
     }
@@ -1047,17 +1098,23 @@ export default function App() {
       <SavePasswordPrompt
         offer={savePasswordOffer}
         onDismiss={() => setSavePasswordOffer(null)}
-        onSave={async () => {
+        onSave={() => {
           if (!savePasswordOffer) return;
-          const result = await window.inix?.autofill.saveCredential({
-            origin: savePasswordOffer.origin,
-            username: savePasswordOffer.username,
-            password: savePasswordOffer.password,
-            title: savePasswordOffer.title,
-          });
-          setSavePasswordOffer(null);
-          if (result?.ok) showToast("Password saved to vault");
-          else showToast(result?.error ?? "Could not save password");
+          void persistSavePasswordOffer(savePasswordOffer);
+        }}
+      />
+
+      <VaultUnlockModal
+        open={vaultUnlockForSave}
+        onClose={() => {
+          pendingSavePassword.current = null;
+          setVaultUnlockForSave(false);
+        }}
+        onUnlocked={() => {
+          setVaultUnlockForSave(false);
+          const pending = pendingSavePassword.current;
+          pendingSavePassword.current = null;
+          if (pending) void persistSavePasswordOffer(pending);
         }}
       />
 

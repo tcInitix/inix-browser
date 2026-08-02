@@ -68,6 +68,28 @@ class SessionManager {
     this.pending = null;
   }
 
+  clearSnapshot(): void {
+    if (this.saveTimer) {
+      clearTimeout(this.saveTimer);
+      this.saveTimer = null;
+    }
+    this.pending = null;
+    if (this.snapshotPath && fs.existsSync(this.snapshotPath)) {
+      try {
+        fs.unlinkSync(this.snapshotPath);
+      } catch {
+        // ignore
+      }
+    }
+    if (this.tempPath && fs.existsSync(this.tempPath)) {
+      try {
+        fs.unlinkSync(this.tempPath);
+      } catch {
+        // ignore
+      }
+    }
+  }
+
   updateNode(tabId: string, patch: Partial<SessionSnapshot["nodes"][string]>): void {
     const snap = this.getRestore();
     if (!snap?.nodes[tabId]) return;

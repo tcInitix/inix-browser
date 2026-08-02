@@ -191,3 +191,13 @@ export function removeVaultEntry(id: number): void {
 export function onAppQuitVault(): void {
   lockVault();
 }
+
+/** Wipe vault passwords, history, autofill profiles, and master password config. */
+export function destroyVault(): void {
+  lockVault();
+  runExec("DELETE FROM vault_history");
+  runExec("DELETE FROM vault_credentials");
+  runExec("DELETE FROM vault_autofill_profiles");
+  runExec("DELETE FROM vault_config");
+  saveDatabase();
+}

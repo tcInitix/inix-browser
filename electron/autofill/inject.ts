@@ -4,6 +4,8 @@ export function getAutofillBootstrapScript(): string {
   window.__inixAutofillInstalled = true;
   if (!window.__inixAutofill) return;
 
+  var lastOfferAt = 0;
+
   function findUsername(form, pwdInput) {
     var inputs = form ? Array.from(form.querySelectorAll('input')) : Array.from(document.querySelectorAll('input'));
     var textTypes = ['text', 'email', 'tel', ''];
@@ -26,6 +28,7 @@ export function getAutofillBootstrapScript(): string {
   }
 
   function getFormCredentials(form) {
+    if (!form) return null;
     var pwd = form.querySelector('input[type=password]');
     if (!pwd || !pwd.value) return null;
     var userInp = findUsername(form, pwd);
@@ -34,17 +37,46 @@ export function getAutofillBootstrapScript(): string {
     return { username: username, password: pwd.value };
   }
 
-  document.addEventListener('submit', function(e) {
-    var form = e.target;
-    if (!form || form.tagName !== 'FORM') return;
+  function offerSaveFromForm(form) {
     var creds = getFormCredentials(form);
     if (!creds) return;
+    var now = Date.now();
+    if (now - lastOfferAt < 2500) return;
+    lastOfferAt = now;
     window.__inixAutofill.offerSave({
       origin: location.origin,
       username: creds.username,
       password: creds.password,
       title: document.title
     });
+  }
+
+  document.addEventListener('submit', function(e) {
+    var form = e.target;
+    if (!form || form.tagName !== 'FORM') return;
+    offerSaveFromForm(form);
+  }, true);
+
+  document.addEventListener('click', function(e) {
+    var t = e.target;
+    if (!t || !t.closest) return;
+    var btn = t.closest('button, input[type=submit], input[type=button], [role=button]');
+    if (!btn) return;
+    var form = btn.closest('form');
+    if (!form || !form.querySelector('input[type=password]')) return;
+    var label = (btn.textContent || btn.value || '').toLowerCase();
+    if (btn.type === 'submit' || label.match(/log\\s*in|sign\\s*in|continue|next|submit/)) {
+      setTimeout(function() { offerSaveFromForm(form); }, 0);
+    }
+  }, true);
+
+  document.addEventListener('keydown', function(e) {
+    if (e.key !== 'Enter') return;
+    var t = e.target;
+    if (!t || t.tagName !== 'INPUT' || t.type !== 'password') return;
+    var form = t.closest('form');
+    if (!form) return;
+    setTimeout(function() { offerSaveFromForm(form); }, 0);
   }, true);
 
   var menuEl = null;
