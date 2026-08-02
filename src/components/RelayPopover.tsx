@@ -1,19 +1,20 @@
 import { useEffect, useRef, useState } from "react";
 import { Switch } from "./Switch";
 import type { RelayState } from "../inix.d";
+import type { SettingsLinkTarget } from "../utils/settings-url";
 
 interface RelayPopoverProps {
   open: boolean;
   state: RelayState;
   onClose: () => void;
   onToggle: (enabled: boolean) => void;
-  onOpenSettings?: (section?: string) => void;
+  onOpenSettings?: (section?: SettingsLinkTarget) => void;
 }
 
 export function RelayPopover({ open, state, onClose, onToggle, onOpenSettings }: RelayPopoverProps) {
   const panelRef = useRef<HTMLDivElement>(null);
 
-  const openSettings = (section?: string) => {
+  const openSettings = (section?: SettingsLinkTarget) => {
     onClose();
     onOpenSettings?.(section);
   };

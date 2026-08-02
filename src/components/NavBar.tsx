@@ -14,6 +14,7 @@ import {
 } from "./chrome/ChromeIcons";
 import { RelayBadge, RelayPopover, useRelayState } from "./RelayPopover";
 import { useChromeOverlay } from "../chrome/ChromeOverlayContext";
+import type { SettingsLinkTarget } from "../utils/settings-url";
 
 export const INIX_BOOKMARK_DRAG = "application/x-inix-bookmark";
 
@@ -35,7 +36,7 @@ interface NavBarProps {
   onReaderMode: () => void;
   bookmarked: boolean;
   aiOpen: boolean;
-  onOpenSettings?: (section?: string) => void;
+  onOpenSettings?: (section?: SettingsLinkTarget) => void;
 }
 
 export const NavBar = forwardRef<AddressBarHandle, NavBarProps>(function NavBar(

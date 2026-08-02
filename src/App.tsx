@@ -21,7 +21,7 @@ import { BootSplash } from "./components/BootSplash";
 import { PanicSetup } from "./components/PanicSetup";
 import { StatusBar } from "./components/StatusBar";
 import { ChromeOverlayProvider } from "./chrome/ChromeOverlayContext";
-import { settingsShellUrl, type SettingsSectionId } from "./utils/settings-url";
+import { settingsShellUrl, type SettingsLinkTarget } from "./utils/settings-url";
 import type { PermissionRequest, InixSettings } from "./inix.d";
 import { parsePanicUrls, serializePanicUrls, normalizePanicUrls } from "./utils/panic";
 import { applyFontScale, applyThemeMode, watchSystemTheme } from "./utils/apply-appearance";
@@ -245,7 +245,7 @@ export default function App() {
   }, []);
 
   const openSettings = useCallback(
-    (section?: SettingsSectionId | "relay") => {
+    (section?: SettingsLinkTarget) => {
       const url = settingsShellUrl(section);
       updateTab(activeTabId, { url, title: "Settings", isLoading: false });
       browser()?.hide();

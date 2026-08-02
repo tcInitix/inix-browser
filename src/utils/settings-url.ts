@@ -15,11 +15,13 @@ export const SETTINGS_SECTION_IDS = [
 
 export type SettingsSectionId = (typeof SETTINGS_SECTION_IDS)[number];
 
+export type SettingsLinkTarget = SettingsSectionId | "relay";
+
 export function isSettingsShellUrl(url: string): boolean {
   return url.split("#")[0]?.split("?")[0] === "inix://settings";
 }
 
-export function settingsShellUrl(section?: SettingsSectionId | "relay"): string {
+export function settingsShellUrl(section?: SettingsLinkTarget): string {
   if (!section) return "inix://settings";
   return `inix://settings#${section}`;
 }
