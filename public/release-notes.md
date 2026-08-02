@@ -1,16 +1,18 @@
-# Inix v0.1.37
+# Inix v0.1.38
 
-A new icon has been added to our application.
+### What's new
+#### Installer Assets Generation Improved
 
-## What's new
+The installer assets generation script now checks if an icon exists and generates one if necessary. If the icon is missing, a message is displayed instructing you to run `generate-installer-assets.ps1` first.
+
+#### Icon Size and Scaling Adjusted
+
+Standard Windows icon sizes are now supported when generating icons using `png-to-ico`. The scaling factor for logos has been adjusted to provide a better visual experience.
+
+### Improvements
+No changes were made to improve performance or functionality in this release.
+
+### Fixes
 ### New Icons
-We've updated our icons for better visual appeal. A new PNG icon is now displayed in the application.
 
-## Improvements
-No changes have been made to improve performance or functionality.
-
-## Fixes
-### Installer Assets Generation
-The installer assets generation script has been improved. Now, it checks if an icon exists and generates one if necessary. If the icon is missing, a message is displayed instructing you to run `generate-installer-assets.ps1` first.
-### Icon Size and Scaling
-When generating icons using `png-to-ico`, standard Windows icon sizes are now supported. The scaling factor for logos has been adjusted to provide a better visual experience.
+A new PNG icon is now displayed in the application, providing a more visually appealing user interface.

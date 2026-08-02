@@ -78,7 +78,7 @@
   --radius-sm: 7px;
   --radius-lg: 14px;
   --radius-xl: 18px;
-  --radius-pill: 999px;
+  --radius-pill: 6px;
 
   /* Typography */
   --font: "Segoe UI", system-ui, -apple-system, sans-serif;
@@ -860,7 +860,7 @@ h3,
   height: 28px;
   padding: 0 10px;
   border: 1px solid transparent;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--bg-hover) 40%, transparent);
   color: var(--text-secondary);
   font-size: 13px;
@@ -5161,7 +5161,7 @@ h3,
   height: 8px;
   margin-top: var(--space-2);
   background: var(--bg-base);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   overflow: hidden;
   border: 1px solid var(--border-hairline);
 }
