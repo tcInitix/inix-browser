@@ -1,8 +1,18 @@
-import { useCallback, useEffect, useRef, useState, type DragEvent, type MouseEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type DragEvent,
+  type MouseEvent,
+} from "react";
 import type { BarNode, Bookmark } from "../inix.d";
 import { INIX_BOOKMARK_DRAG } from "./NavBar";
 
 export const INIX_BAR_NODE_DRAG = "application/x-inix-bar-node";
+
+const OVERFLOW_BTN_WIDTH = 36;
 
 interface BookmarkBarProps {
   refreshKey?: number;
@@ -24,6 +34,15 @@ interface DropTarget {
   index: number;
 }
 
+interface FolderDialogState {
+  mode: "create" | "rename";
+  parentId: number | null;
+  nodeId?: number;
+  value: string;
+  x: number;
+  y: number;
+}
+
 function shortTitle(title: string, url: string): string {
   const t = title.trim();
   if (t && t !== url) return t.length > 32 ? `${t.slice(0, 30)}…` : t;
@@ -39,6 +58,19 @@ function collectBookmarks(node: BarNode): Bookmark[] {
   return node.children.flatMap(collectBookmarks);
 }
 
+function countVisibleItems(containerWidth: number, itemWidths: number[]): number {
+  if (itemWidths.length === 0) return 0;
+  let used = 0;
+  for (let i = 0; i < itemWidths.length; i++) {
+    const w = itemWidths[i];
+    const hiddenAfter = itemWidths.length - i - 1;
+    const reserve = hiddenAfter > 0 ? OVERFLOW_BTN_WIDTH : 0;
+    if (used + w + reserve > containerWidth) return i;
+    used += w;
+  }
+  return itemWidths.length;
+}
+
 export function BookmarkBar({
   refreshKey = 0,
   activeTabId,
@@ -52,8 +84,15 @@ export function BookmarkBar({
   const [menu, setMenu] = useState<ContextMenuState | null>(null);
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
   const [draggingNodeId, setDraggingNodeId] = useState<number | null>(null);
+  const [visibleCount, setVisibleCount] = useState(0);
+  const [overflowOpen, setOverflowOpen] = useState(false);
+  const [folderDialog, setFolderDialog] = useState<FolderDialogState | null>(null);
   const barRef = useRef<HTMLDivElement>(null);
+  const trackRef = useRef<HTMLDivElement>(null);
+  const measureRef = useRef<HTMLDivElement>(null);
   const folderRefs = useRef<Map<number, HTMLButtonElement>>(new Map());
+  const overflowRef = useRef<HTMLButtonElement>(null);
+  const folderInputRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
     const nodes = await window.inix?.bookmarks.listBarTree();
@@ -76,14 +115,49 @@ export function BookmarkBar({
     void load();
   }, [load, refreshKey]);
 
+  const recalculateOverflow = useCallback(() => {
+    const track = trackRef.current;
+    const measure = measureRef.current;
+    if (!track || !measure || tree.length === 0) {
+      setVisibleCount(tree.length);
+      return;
+    }
+
+    const items = measure.querySelectorAll<HTMLElement>("[data-bar-item]");
+    const widths = Array.from(items).map((el) => el.getBoundingClientRect().width);
+    const count = countVisibleItems(track.clientWidth, widths);
+    setVisibleCount(count);
+    if (count >= tree.length) setOverflowOpen(false);
+  }, [tree]);
+
+  useLayoutEffect(() => {
+    recalculateOverflow();
+  }, [recalculateOverflow, favicons, tree]);
+
   useEffect(() => {
-    if (!menu && openFolderId === null) return;
+    const track = trackRef.current;
+    if (!track) return;
+    const ro = new ResizeObserver(() => recalculateOverflow());
+    ro.observe(track);
+    return () => ro.disconnect();
+  }, [recalculateOverflow]);
+
+  useEffect(() => {
+    if (!menu && openFolderId === null && !overflowOpen && !folderDialog) return;
     const close = () => {
       setMenu(null);
       setOpenFolderId(null);
+      setOverflowOpen(false);
     };
     const onDoc = (e: MouseEvent) => {
-      if (barRef.current && !barRef.current.contains(e.target as Node)) close();
+      const t = e.target as Node;
+      if (barRef.current?.contains(t)) {
+        if (folderDialog && (t as HTMLElement).closest?.(".bookmark-bar-folder-dialog")) return;
+        if (overflowRef.current?.contains(t)) return;
+        return;
+      }
+      close();
+      setFolderDialog(null);
     };
     window.addEventListener("click", onDoc as unknown as EventListener);
     window.addEventListener("scroll", close, true);
@@ -91,11 +165,34 @@ export function BookmarkBar({
       window.removeEventListener("click", onDoc as unknown as EventListener);
       window.removeEventListener("scroll", close, true);
     };
-  }, [menu, openFolderId]);
+  }, [menu, openFolderId, overflowOpen, folderDialog]);
+
+  useEffect(() => {
+    if (!folderDialog) return;
+    const input = folderInputRef.current;
+    input?.focus();
+    input?.select();
+  }, [folderDialog]);
 
   const notify = () => {
     onChanged?.();
     void load();
+  };
+
+  const submitFolderDialog = () => {
+    if (!folderDialog) return;
+    const name = folderDialog.value.trim();
+    if (!name) {
+      setFolderDialog(null);
+      return;
+    }
+    if (folderDialog.mode === "create") {
+      void window.inix?.bookmarks.barCreateFolder(name, folderDialog.parentId).then(() => notify());
+    } else if (folderDialog.nodeId != null) {
+      void window.inix?.bookmarks.barRenameFolder(folderDialog.nodeId, name).then(() => notify());
+    }
+    setFolderDialog(null);
+    setMenu(null);
   };
 
   const handleAddressDrop = async (parentId: number | null, index: number, data: string) => {
@@ -149,8 +246,7 @@ export function BookmarkBar({
   };
 
   const renderDropSlot = (parentId: number | null, index: number, key: string) => {
-    const active =
-      dropTarget?.parentId === parentId && dropTarget.index === index;
+    const active = dropTarget?.parentId === parentId && dropTarget.index === index;
     return (
       <div
         key={key}
@@ -170,23 +266,26 @@ export function BookmarkBar({
     node: Extract<BarNode, { type: "bookmark" }>,
     parentId: number | null,
     index: number,
-    inMenu = false
+    opts: { inMenu?: boolean; showDropSlots?: boolean } = {}
   ) => {
+    const { inMenu = false, showDropSlots = true } = opts;
     const b = node.bookmark;
     return (
-      <div key={`b-${node.id}`} className="bookmark-bar-chip-wrap">
-        {!inMenu && renderDropSlot(parentId, index, `slot-${node.id}-before`)}
+      <div
+        key={`b-${node.id}${inMenu ? "-menu" : ""}`}
+        className="bookmark-bar-chip-wrap"
+        data-bar-item={inMenu ? undefined : ""}
+      >
+        {showDropSlots && !inMenu && renderDropSlot(parentId, index, `slot-${node.id}-before`)}
         <button
           type="button"
           className={`bookmark-bar-chip${inMenu ? " bookmark-bar-chip-menu" : ""}`}
-          draggable
+          draggable={!inMenu}
           title={b.title || b.url}
           onClick={() => {
-            if (!inMenu) onNavigate(b.url);
-            else {
-              onNavigate(b.url);
-              setOpenFolderId(null);
-            }
+            onNavigate(b.url);
+            setOpenFolderId(null);
+            setOverflowOpen(false);
           }}
           onAuxClick={(e) => {
             if (e.button === 1) {
@@ -199,6 +298,7 @@ export function BookmarkBar({
             setMenu({ x: e.clientX, y: e.clientY, node, parentId });
           }}
           onDragStart={(e) => {
+            if (inMenu) return;
             setDraggingNodeId(node.id);
             e.dataTransfer.setData(INIX_BAR_NODE_DRAG, JSON.stringify({ nodeId: node.id, parentId }));
             e.dataTransfer.effectAllowed = "move";
@@ -224,11 +324,10 @@ export function BookmarkBar({
       {renderDropSlot(parentId, 0, `menu-slot-${parentId}-0`)}
       {nodes.map((child, i) => {
         if (child.type === "bookmark") {
-          return renderBookmarkChip(child, parentId, i, true);
+          return renderBookmarkChip(child, parentId, i, { inMenu: true, showDropSlots: false });
         }
         return (
           <div key={`f-${child.id}`} className="bookmark-bar-folder-submenu">
-            {renderDropSlot(parentId, i, `menu-slot-${child.id}-before`)}
             <div className="bookmark-bar-folder-menu-item">
               <span className="bookmark-bar-folder-menu-label">📁 {child.title}</span>
               <div className="bookmark-bar-folder-menu-nested">
@@ -238,64 +337,80 @@ export function BookmarkBar({
           </div>
         );
       })}
-      {renderDropSlot(parentId, nodes.length, `menu-slot-${parentId}-end`)}
     </div>
   );
 
-  const renderFolder = (node: Extract<BarNode, { type: "folder" }>, parentId: number | null, index: number) => {
+  const renderFolder = (
+    node: Extract<BarNode, { type: "folder" }>,
+    parentId: number | null,
+    index: number,
+    opts: { inMenu?: boolean; showDropSlots?: boolean } = {}
+  ) => {
+    const { inMenu = false, showDropSlots = true } = opts;
     const isOpen = openFolderId === node.id;
-    const folderBtn = (
-      <button
-        type="button"
-        ref={(el) => {
-          if (el) folderRefs.current.set(node.id, el);
-          else folderRefs.current.delete(node.id);
-        }}
-        className={`bookmark-bar-folder${isOpen ? " is-open" : ""}${dropTarget?.parentId === node.id ? " is-drop-target" : ""}`}
-        draggable
-        title={node.title}
-        onClick={() => setOpenFolderId(isOpen ? null : node.id)}
-        onContextMenu={(e) => {
-          e.preventDefault();
-          setMenu({ x: e.clientX, y: e.clientY, node, parentId });
-        }}
-        onDragStart={(e) => {
-          setDraggingNodeId(node.id);
-          e.dataTransfer.setData(INIX_BAR_NODE_DRAG, JSON.stringify({ nodeId: node.id, parentId }));
-          e.dataTransfer.effectAllowed = "move";
-        }}
-        onDragEnd={() => {
-          setDraggingNodeId(null);
-          setDropTarget(null);
-        }}
-        onDragOver={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          setDropTarget({ parentId: node.id, index: node.children.length });
-        }}
-        onDrop={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          setDropTarget(null);
-          void handleBarDrop(node.id, node.children.length, e);
-        }}
-      >
-        <span className="bookmark-bar-folder-icon">📁</span>
-        <span className="bookmark-bar-folder-label">{node.title}</span>
-        <span className="bookmark-bar-folder-chevron">{isOpen ? "▴" : "▾"}</span>
-      </button>
-    );
 
     return (
-      <div key={`folder-${node.id}`} className="bookmark-bar-folder-wrap">
-        {renderDropSlot(parentId, index, `slot-folder-${node.id}`)}
-        {folderBtn}
-        {isOpen && (
+      <div
+        key={`folder-${node.id}${inMenu ? "-menu" : ""}`}
+        className={`bookmark-bar-folder-wrap${inMenu ? " bookmark-bar-folder-wrap-menu" : ""}`}
+        data-bar-item={inMenu ? undefined : ""}
+      >
+        {showDropSlots && !inMenu && renderDropSlot(parentId, index, `slot-folder-${node.id}`)}
+        <button
+          type="button"
+          ref={(el) => {
+            if (inMenu) return;
+            if (el) folderRefs.current.set(node.id, el);
+            else folderRefs.current.delete(node.id);
+          }}
+          className={`bookmark-bar-folder${isOpen ? " is-open" : ""}${dropTarget?.parentId === node.id ? " is-drop-target" : ""}${inMenu ? " bookmark-bar-chip-menu" : ""}`}
+          draggable={!inMenu}
+          title={node.title}
+          onClick={() => {
+            setOpenFolderId(isOpen ? null : node.id);
+            if (!inMenu) setOverflowOpen(false);
+          }}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            setMenu({ x: e.clientX, y: e.clientY, node, parentId });
+          }}
+          onDragStart={(e) => {
+            if (inMenu) return;
+            setDraggingNodeId(node.id);
+            e.dataTransfer.setData(INIX_BAR_NODE_DRAG, JSON.stringify({ nodeId: node.id, parentId }));
+            e.dataTransfer.effectAllowed = "move";
+          }}
+          onDragEnd={() => {
+            setDraggingNodeId(null);
+            setDropTarget(null);
+          }}
+          onDragOver={(e) => {
+            if (inMenu) return;
+            e.preventDefault();
+            e.stopPropagation();
+            setDropTarget({ parentId: node.id, index: node.children.length });
+          }}
+          onDrop={(e) => {
+            if (inMenu) return;
+            e.preventDefault();
+            e.stopPropagation();
+            setDropTarget(null);
+            void handleBarDrop(node.id, node.children.length, e);
+          }}
+        >
+          <span className="bookmark-bar-folder-icon">📁</span>
+          <span className="bookmark-bar-folder-label">{node.title}</span>
+          {!inMenu && <span className="bookmark-bar-folder-chevron">{isOpen ? "▴" : "▾"}</span>}
+        </button>
+        {isOpen && inMenu && (
+          <div className="bookmark-bar-overflow-folder-children">
+            {node.children.map((child, ci) => renderNode(child, node.id, ci, { inMenu: true }))}
+          </div>
+        )}
+        {isOpen && !inMenu && (
           <div
             className="bookmark-bar-folder-popup"
-            style={{
-              left: folderRefs.current.get(node.id)?.offsetLeft ?? 0,
-            }}
+            style={{ left: folderRefs.current.get(node.id)?.offsetLeft ?? 0 }}
           >
             {renderFolderMenu(node.children, node.id)}
           </div>
@@ -304,17 +419,32 @@ export function BookmarkBar({
     );
   };
 
-  const renderRoot = () => (
+  const renderNode = (
+    node: BarNode,
+    parentId: number | null,
+    index: number,
+    opts?: { inMenu?: boolean; showDropSlots?: boolean }
+  ) => {
+    if (node.type === "bookmark") return renderBookmarkChip(node, parentId, index, opts);
+    return renderFolder(node, parentId, index, opts);
+  };
+
+  const renderItemRow = (
+    nodes: BarNode[],
+    opts: { inMenu?: boolean; showDropSlots?: boolean; keyPrefix?: string } = {}
+  ) => (
     <>
-      {renderDropSlot(null, 0, "root-0")}
-      {tree.map((node, i) => {
-        if (node.type === "bookmark") return renderBookmarkChip(node, null, i);
-        return renderFolder(node, null, i);
-      })}
-      {renderDropSlot(null, tree.length, "root-end")}
+      {opts.showDropSlots !== false && !opts.inMenu && renderDropSlot(null, 0, `${opts.keyPrefix ?? ""}root-0`)}
+      {nodes.map((node, i) => renderNode(node, null, i, opts))}
+      {opts.showDropSlots !== false &&
+        !opts.inMenu &&
+        renderDropSlot(null, nodes.length, `${opts.keyPrefix ?? ""}root-end`)}
     </>
   );
 
+  const visibleNodes = tree.slice(0, visibleCount);
+  const overflowNodes = tree.slice(visibleCount);
+  const hasOverflow = overflowNodes.length > 0;
   const empty = tree.length === 0;
 
   return (
@@ -339,11 +469,37 @@ export function BookmarkBar({
         }
       }}
     >
-      <div className="bookmark-bar-scroll">{renderRoot()}</div>
+      <div className="bookmark-bar-measure" ref={measureRef} aria-hidden>
+        {renderItemRow(tree, { showDropSlots: true, keyPrefix: "m-" })}
+      </div>
 
-      {empty && (
-        <span className="bookmark-bar-empty-hint">Drag a site here to bookmark</span>
+      <div className="bookmark-bar-track" ref={trackRef}>
+        {renderItemRow(visibleNodes, { showDropSlots: true, keyPrefix: "v-" })}
+      </div>
+
+      {hasOverflow && (
+        <button
+          type="button"
+          ref={overflowRef}
+          className={`bookmark-bar-overflow${overflowOpen ? " is-open" : ""}`}
+          title={`${overflowNodes.length} more bookmark${overflowNodes.length === 1 ? "" : "s"}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            setOverflowOpen((o) => !o);
+            setOpenFolderId(null);
+          }}
+        >
+          »
+        </button>
       )}
+
+      {hasOverflow && overflowOpen && (
+        <div className="bookmark-bar-overflow-menu">
+          {overflowNodes.map((node, i) => renderNode(node, null, visibleCount + i, { inMenu: true }))}
+        </div>
+      )}
+
+      {empty && <span className="bookmark-bar-empty-hint">Drag a site here to bookmark</span>}
 
       {menu && (
         <div
@@ -354,12 +510,13 @@ export function BookmarkBar({
           <button
             type="button"
             onClick={() => {
-              const name = window.prompt("Folder name", "New folder");
-              if (name?.trim()) {
-                void window.inix?.bookmarks
-                  .barCreateFolder(name.trim(), menu.parentId)
-                  .then(() => notify());
-              }
+              setFolderDialog({
+                mode: "create",
+                parentId: menu.parentId,
+                value: "New folder",
+                x: menu.x,
+                y: menu.y,
+              });
               setMenu(null);
             }}
           >
@@ -370,12 +527,14 @@ export function BookmarkBar({
               <button
                 type="button"
                 onClick={() => {
-                  const name = window.prompt("Rename folder", menu.node?.type === "folder" ? menu.node.title : "");
-                  if (name?.trim()) {
-                    void window.inix?.bookmarks
-                      .barRenameFolder(menu.node!.id, name.trim())
-                      .then(() => notify());
-                  }
+                  setFolderDialog({
+                    mode: "rename",
+                    parentId: menu.parentId,
+                    nodeId: menu.node!.id,
+                    value: menu.node?.type === "folder" ? menu.node.title : "",
+                    x: menu.x,
+                    y: menu.y,
+                  });
                   setMenu(null);
                 }}
               >
@@ -429,6 +588,40 @@ export function BookmarkBar({
               </button>
             </>
           )}
+        </div>
+      )}
+
+      {folderDialog && (
+        <div
+          className="bookmark-bar-folder-dialog"
+          style={{
+            left: folderDialog.x,
+            top: folderDialog.y + 8,
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <label className="bookmark-bar-folder-dialog-label">
+            {folderDialog.mode === "create" ? "New folder" : "Rename folder"}
+          </label>
+          <input
+            ref={folderInputRef}
+            type="text"
+            className="bookmark-bar-folder-dialog-input"
+            value={folderDialog.value}
+            onChange={(e) => setFolderDialog({ ...folderDialog, value: e.target.value })}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") submitFolderDialog();
+              if (e.key === "Escape") setFolderDialog(null);
+            }}
+          />
+          <div className="bookmark-bar-folder-dialog-actions">
+            <button type="button" className="bookmark-bar-folder-dialog-cancel" onClick={() => setFolderDialog(null)}>
+              Cancel
+            </button>
+            <button type="button" className="bookmark-bar-folder-dialog-save" onClick={submitFolderDialog}>
+              Save
+            </button>
+          </div>
         </div>
       )}
     </div>

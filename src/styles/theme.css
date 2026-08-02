@@ -662,6 +662,157 @@ h3,
   pointer-events: none;
 }
 
+.bookmark-bar-measure {
+  position: absolute;
+  visibility: hidden;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  height: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.bookmark-bar-track {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  overflow: hidden;
+  flex: 1;
+  min-width: 0;
+  padding: 0 4px 0 8px;
+  min-height: 100%;
+}
+
+.bookmark-bar-overflow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 28px;
+  margin: 0 6px 0 2px;
+  flex-shrink: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.bookmark-bar-overflow:hover,
+.bookmark-bar-overflow.is-open {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.bookmark-bar-overflow-menu {
+  position: absolute;
+  top: calc(100% + 2px);
+  right: 6px;
+  z-index: 10001;
+  min-width: 200px;
+  max-width: 320px;
+  max-height: 360px;
+  overflow: auto;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+}
+
+.bookmark-bar-folder-wrap-menu {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.bookmark-bar-overflow-folder-children {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 2px 0 4px 12px;
+  border-left: 1px solid var(--border-subtle);
+  margin-left: 8px;
+}
+
+.bookmark-bar-folder-dialog {
+  position: fixed;
+  z-index: 10003;
+  min-width: 220px;
+  padding: 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+}
+
+.bookmark-bar-folder-dialog-label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.bookmark-bar-folder-dialog-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-size: 13px;
+  outline: none;
+}
+
+.bookmark-bar-folder-dialog-input:focus {
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+}
+
+.bookmark-bar-folder-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.bookmark-bar-folder-dialog-cancel,
+.bookmark-bar-folder-dialog-save {
+  padding: 6px 12px;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.bookmark-bar-folder-dialog-cancel {
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.bookmark-bar-folder-dialog-cancel:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.bookmark-bar-folder-dialog-save {
+  background: var(--accent);
+  color: #fff;
+}
+
+.bookmark-bar-folder-dialog-save:hover {
+  filter: brightness(1.08);
+}
+
 .bookmark-bar-scroll {
   display: flex;
   align-items: center;

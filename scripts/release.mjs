@@ -20,6 +20,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { bumpPatchVersion, runGenerateReleaseNotes } from "./generate-release-notes.mjs";
 import { updateGithubReleaseFromFile } from "./github-release.mjs";
+import {
+  closeLockingProcesses,
+  copyArtifactsToReleaseBuild,
+  createStagingOutputDir,
+  runElectronBuilder,
+} from "./electron-build.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
@@ -142,39 +148,25 @@ function runShell(command) {
   execSync(command, { cwd: ROOT, stdio: "inherit", shell: true });
 }
 
-/** Release rebuild fails if a running Inix build holds locks on release/win-unpacked. */
+/** Build into a fresh temp dir so locked release-build/win-unpacked never blocks packaging. */
 function prepareReleaseBuild() {
-  if (process.platform === "win32") {
-    for (const image of ["Inix.exe", "electron.exe"]) {
-      try {
-        execFileSync("taskkill", ["/IM", image, "/F", "/T"], { stdio: "pipe" });
-        console.log(`Closed ${image} before build.`);
-      } catch {
-        // not running
-      }
-    }
-
-    try {
-      execSync("ping -n 2 127.0.0.1 > nul", { stdio: "ignore", shell: true });
-    } catch {
-      // ignore
-    }
-  }
-
-  // electron-builder auto-excludes the output dir from the app package. When we
-  // build into release-build/, the release/ folder (full of old .exe installers)
-  // is no longer excluded and can bloat app.asar to ~1.5 GB — see package.json files.
-  const buildOutput = path.join(ROOT, "release-build");
-  fs.mkdirSync(buildOutput, { recursive: true });
-  return buildOutput;
+  closeLockingProcesses();
+  return createStagingOutputDir();
 }
 
 function buildShellCommand(buildOutput) {
-  const outputArg = JSON.stringify(buildOutput);
-  return (
-    "npm run installer:assets && npx tsc && npx vite build && " +
-    `npx electron-builder --publish always --config.directories.output=${outputArg}`
-  );
+  return "npm run installer:assets && npx tsc && npx vite build";
+}
+
+function runReleaseBuild(buildOutput) {
+  runShell(buildShellCommand(buildOutput));
+  runElectronBuilder(buildOutput, { publish: true });
+  copyArtifactsToReleaseBuild(buildOutput);
+  try {
+    fs.rmSync(buildOutput, { recursive: true, force: true });
+  } catch {
+    console.warn(`Could not remove staging dir (safe to delete): ${buildOutput}`);
+  }
 }
 
 function gitOk(...args) {
@@ -360,8 +352,8 @@ async function main() {
 
   console.log("Step 4/5 — Build & publish to GitHub Releases…");
   const buildOutput = prepareReleaseBuild();
-  console.log(`Building into ${path.relative(ROOT, buildOutput)} (avoids locked release/win-unpacked)`);
-  runShell(buildShellCommand(buildOutput));
+  console.log(`Building into ${buildOutput} (fresh staging dir — avoids locked app.asar)`);
+  runReleaseBuild(buildOutput);
 
   console.log("Step 5/5 — Attach release notes on GitHub…");
   await publishNotesToGithub(nextVersion);
