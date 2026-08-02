@@ -117,6 +117,25 @@ function runShell(command) {
   execSync(command, { cwd: ROOT, stdio: "inherit", shell: true });
 }
 
+/** Release rebuild fails if a running Inix build holds locks on release/win-unpacked. */
+function closeRunningAppForBuild() {
+  if (process.platform !== "win32") return;
+
+  try {
+    execFileSync("taskkill", ["/IM", "Inix.exe", "/F", "/T"], { stdio: "pipe" });
+    console.log("Closed running Inix processes before build.");
+  } catch {
+    // No Inix.exe running — expected on most builds.
+  }
+
+  // Give Windows a moment to release file handles on app.asar.
+  try {
+    execSync("ping -n 2 127.0.0.1 > nul", { stdio: "ignore", shell: true });
+  } catch {
+    // ignore
+  }
+}
+
 function gitOk(...args) {
   try {
     execFileSync("git", args, { cwd: ROOT, stdio: "pipe" });
@@ -174,7 +193,14 @@ function gitPush(version, opts) {
   if (branch) {
     run("git", ["push", "origin", branch]);
   }
-  run("git", ["push", "origin", `v${version}`]);
+
+  const tag = `v${version}`;
+  try {
+    run("git", ["push", "origin", tag]);
+  } catch {
+    // electron-builder --publish always creates the tag on GitHub before we push.
+    console.warn(`Tag ${tag} already exists on GitHub — skipping tag push.`);
+  }
 }
 
 async function publishNotesToGithub(version) {
@@ -257,6 +283,7 @@ async function main() {
   ensureGhToken();
 
   console.log("Step 4/5 — Build & publish to GitHub Releases…");
+  closeRunningAppForBuild();
   runShell("npm run installer:assets && npx tsc && npx vite build && npx electron-builder --publish always");
 
   console.log("Step 5/5 — Attach release notes on GitHub…");
