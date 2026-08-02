@@ -62,8 +62,10 @@ export const NavBar = forwardRef<AddressBarHandle, NavBarProps>(function NavBar(
   const inputRef = useRef<HTMLInputElement>(null);
   const [relayOpen, setRelayOpen] = useState(false);
   const [relayState, setRelayEnabled] = useRelayState();
+  const [securityOpen, setSecurityOpen] = useState(false);
 
   useChromeOverlay("relay-popover", relayOpen);
+  useChromeOverlay("security-popover", securityOpen);
 
   useImperativeHandle(ref, () => ({
     focus: () => {
@@ -116,6 +118,16 @@ export const NavBar = forwardRef<AddressBarHandle, NavBarProps>(function NavBar(
     securityState === "secure" ? "🔒" : securityState === "warning" ? "⚠" : securityState === "insecure" ? "⚠" : "○";
 
   const canDragSite = !isShellUrl(tab.url) && tab.url.startsWith("http");
+
+  let siteHost = "";
+  let siteProtocol = "";
+  try {
+    const parsed = new URL(tab.url);
+    siteHost = parsed.hostname;
+    siteProtocol = parsed.protocol;
+  } catch {
+    // ignore
+  }
 
   return (
     <nav className="nav-bar">
@@ -179,9 +191,69 @@ export const NavBar = forwardRef<AddressBarHandle, NavBarProps>(function NavBar(
                 <span className="address-site-chip-icon address-site-chip-globe">◉</span>
               )}
               {showSecure && (
-                <span className={`address-site-chip-lock ${securityState}`} title={securityTitle}>
+                <button
+                  type="button"
+                  className={`address-site-chip-lock ${securityState}`}
+                  title={securityTitle}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSecurityOpen((v) => !v);
+                  }}
+                  aria-label={`Security: ${securityState}`}
+                >
                   {securityIcon}
-                </span>
+                </button>
+              )}
+              {securityOpen && (
+                <>
+                  <div className="security-popover-backdrop" onClick={() => setSecurityOpen(false)} />
+                  <div className="security-popover" role="dialog" aria-label="Connection security">
+                    <div className={`security-popover-header ${securityState}`}>
+                      <span className="security-popover-icon">{securityIcon}</span>
+                      <div>
+                        <strong>
+                          {securityState === "secure"
+                            ? "Connection is secure"
+                            : securityState === "warning"
+                              ? "Certificate issue"
+                              : securityState === "insecure"
+                                ? "Not secure"
+                                : "Security unknown"}
+                        </strong>
+                        {siteHost && <div className="security-popover-host">{siteHost}</div>}
+                      </div>
+                    </div>
+                    <p className="security-popover-body">
+                      {securityState === "secure"
+                        ? "Your information (for example, passwords or credit card numbers) is encrypted when sent to this site."
+                        : securityState === "warning"
+                          ? tab.securityDetail ?? "The site's certificate has an issue. Proceed with caution."
+                          : securityState === "insecure"
+                            ? "This site uses an unencrypted HTTP connection. Attackers on the network may see or modify anything you send or receive."
+                            : "Inix does not yet have security info for this page."}
+                    </p>
+                    <div className="security-popover-meta">
+                      <div>
+                        <span>Protocol</span>
+                        <strong>{siteProtocol.replace(":", "").toUpperCase() || "—"}</strong>
+                      </div>
+                    </div>
+                    {onOpenSettings && (
+                      <div className="security-popover-actions">
+                        <button
+                          type="button"
+                          className="ghost-button"
+                          onClick={() => {
+                            setSecurityOpen(false);
+                            onOpenSettings("privacy");
+                          }}
+                        >
+                          Site settings
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </>
               )}
             </div>
           )}

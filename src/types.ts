@@ -40,6 +40,14 @@ export interface Tab {
 
   audible?: boolean;
 
+  muted?: boolean;
+
+  groupId?: string;
+
+  groupName?: string;
+
+  groupColor?: string;
+
 }
 
 
@@ -94,6 +102,30 @@ let aliasMap: Record<string, string> = {};
 
 let searchEngineId: SearchEngineId = "duckduckgo";
 let customSearchUrl = "";
+
+// Keyword search: "g cats" → Google search for cats, etc.
+const KEYWORD_TEMPLATES: Record<string, string> = {
+  g: "https://www.google.com/search?q=%s",
+  google: "https://www.google.com/search?q=%s",
+  ddg: "https://duckduckgo.com/?q=%s",
+  bing: "https://www.bing.com/search?q=%s",
+  yt: "https://www.youtube.com/results?search_query=%s",
+  youtube: "https://www.youtube.com/results?search_query=%s",
+  w: "https://en.wikipedia.org/wiki/Special:Search?search=%s",
+  wiki: "https://en.wikipedia.org/wiki/Special:Search?search=%s",
+  gh: "https://github.com/search?q=%s",
+  github: "https://github.com/search?q=%s",
+  npm: "https://www.npmjs.com/search?q=%s",
+  mdn: "https://developer.mozilla.org/en-US/search?q=%s",
+  so: "https://stackoverflow.com/search?q=%s",
+  a: "https://www.amazon.com/s?k=%s",
+  amazon: "https://www.amazon.com/s?k=%s",
+  r: "https://www.reddit.com/search/?q=%s",
+  reddit: "https://www.reddit.com/search/?q=%s",
+  map: "https://www.google.com/maps/search/%s",
+  x: "https://x.com/search?q=%s",
+  twitter: "https://x.com/search?q=%s",
+};
 
 export function setSearchEngineConfig(engine: SearchEngineId, customUrl = ""): void {
   searchEngineId = engine;
@@ -306,7 +338,16 @@ export function normalizeUrl(input: string): string {
 
   if (/^https?:\/\//i.test(trimmed)) return trimmed;
 
-
+  // Keyword search: "g cats", "yt music"
+  const spaceIdx = trimmed.indexOf(" ");
+  if (spaceIdx > 0) {
+    const kw = trimmed.slice(0, spaceIdx).toLowerCase();
+    const rest = trimmed.slice(spaceIdx + 1).trim();
+    const template = KEYWORD_TEMPLATES[kw];
+    if (template && rest) {
+      return template.replace(/%s/g, encodeURIComponent(rest));
+    }
+  }
 
   if (trimmed.includes(".") && !trimmed.includes(" ")) {
 

@@ -282,16 +282,52 @@ export function NewTabPage({ onNavigate, onOpenSearch, onOpenLibrary }: NewTabPa
             </div>
           ) : links.length > 0 ? (
             <div className="quick-links">
-              {links.map((link) => (
-                <button
+              {links.map((link, index) => (
+                <div
                   key={link.url + link.label}
-                  type="button"
-                  className="quick-link"
-                  onClick={() => void onNavigate(link.url)}
+                  className="quick-link-wrap"
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData("text/plain", String(index));
+                    e.dataTransfer.effectAllowed = "move";
+                  }}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = "move";
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    const from = parseInt(e.dataTransfer.getData("text/plain"), 10);
+                    if (Number.isNaN(from) || from === index) return;
+                    const next = [...links];
+                    const [moved] = next.splice(from, 1);
+                    next.splice(index, 0, moved);
+                    commitLinks(next);
+                  }}
                 >
-                  <QuickLinkIcon link={link} />
-                  <span className="quick-link-label">{link.label}</span>
-                </button>
+                  <button
+                    type="button"
+                    className="quick-link"
+                    onClick={() => void onNavigate(link.url)}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      if (window.confirm(`Remove "${link.label}"?`)) removeLink(index);
+                    }}
+                    title={`${link.label} — right-click to remove`}
+                  >
+                    <QuickLinkIcon link={link} />
+                    <span className="quick-link-label">{link.label}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="quick-link-hover-remove"
+                    onClick={() => removeLink(index)}
+                    aria-label={`Remove ${link.label}`}
+                    title="Remove"
+                  >
+                    ✕
+                  </button>
+                </div>
               ))}
             </div>
           ) : (

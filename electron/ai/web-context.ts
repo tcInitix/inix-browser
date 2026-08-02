@@ -1,5 +1,6 @@
 import { extractPageInMain } from "../storage/page-extractor";
 import { shouldSearchWebForMessage } from "./casual-chat";
+import { getSetting } from "../storage/settings";
 
 const FETCH_TIMEOUT_MS = 12_000;
 const MAX_HTML_BYTES = 2 * 1024 * 1024;
@@ -167,6 +168,32 @@ function parseDdgHtml(html: string, limit: number): SearchResult[] {
 export async function searchWeb(query: string, limit = 5): Promise<SearchResult[]> {
   if (!query.trim()) return [];
 
+  const backend = getSetting("ai_search_backend") || "duckduckgo";
+
+  try {
+    if (backend === "brave") {
+      const key = getSetting("ai_search_brave_key").trim();
+      if (key) {
+        const results = await searchBrave(query, limit, key);
+        if (results.length > 0) return results;
+      }
+      // fall through to DDG on missing key / empty
+    }
+    if (backend === "searxng") {
+      const host = getSetting("ai_search_searxng_url").trim();
+      if (host) {
+        const results = await searchSearxng(query, limit, host);
+        if (results.length > 0) return results;
+      }
+    }
+  } catch {
+    // fall back to DDG below
+  }
+
+  return searchDuckDuckGo(query, limit);
+}
+
+async function searchDuckDuckGo(query: string, limit: number): Promise<SearchResult[]> {
   const body = new URLSearchParams({ q: query.trim(), b: "", kl: "" });
   const res = await fetch("https://html.duckduckgo.com/html/", {
     method: "POST",
@@ -180,6 +207,39 @@ export async function searchWeb(query: string, limit = 5): Promise<SearchResult[
 
   if (!res.ok) return [];
   return parseDdgHtml(await res.text(), limit);
+}
+
+async function searchBrave(query: string, limit: number, key: string): Promise<SearchResult[]> {
+  const url = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=${limit}`;
+  const res = await fetch(url, {
+    headers: { Accept: "application/json", "X-Subscription-Token": key },
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+  });
+  if (!res.ok) return [];
+  const data = (await res.json()) as { web?: { results?: Array<{ title?: string; url?: string; description?: string }> } };
+  const rows = data.web?.results ?? [];
+  return rows.slice(0, limit).map((r) => ({
+    title: stripTags(r.title ?? ""),
+    url: r.url ?? "",
+    snippet: stripTags(r.description ?? ""),
+  })).filter((r) => r.url.startsWith("http"));
+}
+
+async function searchSearxng(query: string, limit: number, host: string): Promise<SearchResult[]> {
+  const base = host.replace(/\/+$/, "");
+  const url = `${base}/search?q=${encodeURIComponent(query)}&format=json`;
+  const res = await fetch(url, {
+    headers: { Accept: "application/json", "User-Agent": BROWSER_UA },
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+  });
+  if (!res.ok) return [];
+  const data = (await res.json()) as { results?: Array<{ title?: string; url?: string; content?: string }> };
+  const rows = data.results ?? [];
+  return rows.slice(0, limit).map((r) => ({
+    title: stripTags(r.title ?? ""),
+    url: r.url ?? "",
+    snippet: stripTags(r.content ?? ""),
+  })).filter((r) => r.url.startsWith("http"));
 }
 
 export async function fetchUrlContent(url: string): Promise<FetchedPage | null> {

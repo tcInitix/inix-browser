@@ -19,6 +19,7 @@ export const DEFAULT_SETTINGS: Record<string, string> = {
   restore_tabs_on_launch: "true",
   private_mode_shortcut: "window",
   bookmark_bar_enabled: "false",
+  tab_bar_orientation: "horizontal",
   panic_configured: "false",
   panic_urls: "[]",
   new_tab_quick_links: "[]",
@@ -50,4 +51,7 @@ export const DEFAULT_SETTINGS: Record<string, string> = {
   relay_connect_on_startup: "false",
   relay_custom_url: "",
   onboarding_completed: "false",
+  ai_search_backend: "duckduckgo",
+  ai_search_brave_key: "",
+  ai_search_searxng_url: "",
 };

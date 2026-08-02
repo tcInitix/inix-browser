@@ -1,6 +1,6 @@
 {
   "name": "inix-browser",
-  "version": "0.1.46",
+  "version": "0.1.47",
   "description": "Inix — a fast, private browser",
   "homepage": "https://github.com/tcInitix/inix-browser",
   "main": "dist-electron/main.js",
@@ -70,6 +70,58 @@
       "icon": "build/icon.ico",
       "signAndEditExecutable": false,
       "artifactName": "Inix-Setup-${version}.${ext}"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "icon": "build/icon.icns",
+      "category": "public.app-category.productivity",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "artifactName": "Inix-${version}-${arch}.${ext}"
+    },
+    "dmg": {
+      "title": "Inix ${version}",
+      "backgroundColor": "#0b0b0f"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "rpm",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png",
+      "category": "Network;WebBrowser",
+      "artifactName": "Inix-${version}-${arch}.${ext}"
     },
     "nsis": {
       "include": "build/installer.nsh",

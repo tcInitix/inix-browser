@@ -59,6 +59,22 @@ export function registerBrowserHandlers(getWindow: () => BrowserWindow | null) {
     }
   });
 
+  ipcMain.handle("browser:capture-page", async (_e, tabId: string) => {
+    const wc = tabManager.getWebContents(tabId);
+    if (!wc || wc.isDestroyed()) return null;
+    try {
+      const image = await wc.capturePage();
+      return image.toDataURL();
+    } catch {
+      return null;
+    }
+  });
+
+  ipcMain.handle("browser:set-muted", (_e, tabId: string, muted: boolean) =>
+    tabManager.setMuted(tabId, muted)
+  );
+  ipcMain.handle("browser:is-muted", (_e, tabId: string) => tabManager.isMuted(tabId));
+
   ipcMain.handle("downloads:list", () => listDownloads());
   ipcMain.handle("downloads:cancel", (_e, id: string) => cancelDownload(id));
   ipcMain.handle("downloads:open", (_e, id: string) => openDownload(id));

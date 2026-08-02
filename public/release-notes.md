@@ -1,6 +1,5 @@
-# Inix v0.1.45
-
-**Smoother Updates and Better Performance**
+# Smoother Updates and Better Performance
+We've made significant improvements to the update experience, including better handling of silent errors and more detailed feedback.
 
 ## Improvements
 
@@ -20,6 +19,3 @@ We've improved accessibility for users with screen readers, making Inix more inc
 Our error messages have been enhanced to provide better feedback and a smoother browsing experience.
 
 ## Fixes
-
-*   **Error Handling**: Improved error handling during password import from CSV files, ensuring a more seamless experience.
-*   **Vault Unlock Feedback**: The vault unlock feature now displays a message when unlocking the vault for the first time, improving the overall user experience.

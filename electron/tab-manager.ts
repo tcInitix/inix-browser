@@ -20,8 +20,9 @@ import {
   initProfileSessions,
 } from "./profiles/manager";
 
-import { getSettings } from "./storage/settings";
+import { getSettings, getZoomForHost, setZoomForHost } from "./storage/settings";
 import { getAutofillBootstrapScript } from "./autofill/inject";
+import { startGoogleAuth } from "./auth/google-auth";
 
 export const BASE_TOP_CHROME = 90;
 export const BOOKMARK_BAR_HEIGHT = 34;
@@ -30,6 +31,16 @@ export const TOP_CHROME = BASE_TOP_CHROME;
 export const BOTTOM_CHROME = 32;
 
 export const SIDEBAR_WIDTH = 360;
+
+let currentSidebarWidth = SIDEBAR_WIDTH;
+
+export function setSidebarWidth(width: number): void {
+  currentSidebarWidth = Math.max(280, Math.min(900, Math.round(width)));
+}
+
+export function getSidebarWidth(): number {
+  return currentSidebarWidth;
+}
 
 
 
@@ -60,6 +71,8 @@ export interface TabUpdate {
   zoomLevel?: number;
 
   audible?: boolean;
+
+  muted?: boolean;
 
 }
 
@@ -520,7 +533,7 @@ export class TabManager {
 
     }
 
-    const sidebarOffset = state.sidebarOpen ? SIDEBAR_WIDTH : 0;
+    const sidebarOffset = state.sidebarOpen ? currentSidebarWidth : 0;
 
     return {
 
@@ -662,6 +675,10 @@ export class TabManager {
 
       const win = this.winForTab(tabId);
 
+      if (url && win && startGoogleAuth(tabId, url, win, wc.getURL())) {
+        return { action: "deny" };
+      }
+
       if (this.onNewTab && url && win) {
 
         this.onNewTab(win, tabId, url);
@@ -673,6 +690,11 @@ export class TabManager {
     });
 
     wc.on("will-navigate", (event, url) => {
+      const win = this.winForTab(tabId);
+      if (win && startGoogleAuth(tabId, url, win, wc.getURL())) {
+        event.preventDefault();
+        return;
+      }
       if (!getSettings().https_only_mode) return;
       if (!url.startsWith("http://")) return;
       try {
@@ -811,6 +833,28 @@ export class TabManager {
     wc.on("did-navigate", (_e, url) => {
 
       this.certErrors.delete(tabId);
+
+      // Apply saved per-host zoom
+      try {
+        if (/^https?:\/\//i.test(url)) {
+          const host = new URL(url).hostname;
+          const savedZoom = getZoomForHost(host);
+          if (savedZoom !== undefined) {
+            this.zoomLevels.set(tabId, savedZoom);
+            wc.setZoomLevel(savedZoom);
+            this.emit(tabId, { zoomLevel: savedZoom });
+          } else {
+            const defaultZoom = getSettings().default_zoom_level;
+            if (this.zoomLevels.get(tabId) !== defaultZoom) {
+              this.zoomLevels.set(tabId, defaultZoom);
+              wc.setZoomLevel(defaultZoom);
+              this.emit(tabId, { zoomLevel: defaultZoom });
+            }
+          }
+        }
+      } catch {
+        // ignore
+      }
 
       this.emit(tabId, {
 
@@ -1154,6 +1198,11 @@ export class TabManager {
 
 
 
+    if (startGoogleAuth(tabId, loadUrl, win, this.getTabUrl(tabId))) {
+      this.emit(tabId, { isLoading: false });
+      return;
+    }
+
     try {
 
       await view.webContents.loadURL(loadUrl);
@@ -1290,6 +1339,34 @@ export class TabManager {
 
 
 
+  setMuted(tabId: string, muted: boolean): boolean {
+
+    const wc = this.views.get(tabId)?.webContents;
+
+    if (!wc || wc.isDestroyed()) return false;
+
+    wc.setAudioMuted(muted);
+
+    this.emit(tabId, { muted });
+
+    return muted;
+
+  }
+
+
+
+  isMuted(tabId: string): boolean {
+
+    const wc = this.views.get(tabId)?.webContents;
+
+    if (!wc || wc.isDestroyed()) return false;
+
+    return wc.isAudioMuted();
+
+  }
+
+
+
   private setZoom(tabId: string, level: number): number {
 
     const clamped = Math.max(-3, Math.min(5, level));
@@ -1299,6 +1376,17 @@ export class TabManager {
     const wc = this.views.get(tabId)?.webContents;
 
     if (wc) wc.setZoomLevel(clamped);
+
+    // Persist per-host for http(s) URLs
+    try {
+      const url = wc?.getURL() ?? "";
+      if (/^https?:\/\//i.test(url)) {
+        const host = new URL(url).hostname;
+        if (host) setZoomForHost(host, clamped);
+      }
+    } catch {
+      // ignore
+    }
 
     this.emit(tabId, { zoomLevel: clamped });
 

@@ -231,6 +231,8 @@ export function SettingsPage({
   const [newAliasUrl, setNewAliasUrl] = useState("");
   const [newAliasTitle, setNewAliasTitle] = useState("");
   const [saved, setSaved] = useState(false);
+  const [backupBusy, setBackupBusy] = useState<"export" | "import" | null>(null);
+  const [backupMessage, setBackupMessage] = useState<string | null>(null);
   const [vaultConfigured, setVaultConfigured] = useState(false);
   const [vaultUnlocked, setVaultUnlocked] = useState(false);
   const [vaultModalOpen, setVaultModalOpen] = useState(false);
@@ -717,6 +719,49 @@ export function SettingsPage({
   const rebuildIndex = async () => {
     await window.inix?.settings.rebuildIndex();
     alert("Inix search index rebuild started. This runs in the background.");
+  };
+
+  const exportBackup = async () => {
+    const pw = prompt(
+      "Enter a passphrase to encrypt your backup (min. 8 characters).\n\nKeep it safe — without it, the backup can't be restored.",
+    );
+    if (!pw) return;
+    if (pw.length < 8) {
+      setBackupMessage("Passphrase must be at least 8 characters.");
+      return;
+    }
+    setBackupBusy("export");
+    setBackupMessage(null);
+    const res = await window.inix?.backup.export(pw);
+    setBackupBusy(null);
+    if (res?.ok) {
+      setBackupMessage(`Backup saved to ${res.path}`);
+    } else if (res?.error && res.error !== "Cancelled") {
+      setBackupMessage(`Export failed: ${res.error}`);
+    }
+  };
+
+  const importBackup = async () => {
+    const pw = prompt("Enter the passphrase for the backup file to restore.");
+    if (!pw) return;
+    if (
+      !confirm(
+        "Restore from backup?\n\nBookmarks are merged (duplicates skipped). Bookmark bar, aliases, and settings will be replaced. Vault contents are not affected.",
+      )
+    ) {
+      return;
+    }
+    setBackupBusy("import");
+    setBackupMessage(null);
+    const res = await window.inix?.backup.import(pw);
+    setBackupBusy(null);
+    if (res?.ok && res.imported) {
+      setBackupMessage(
+        `Restored ${res.imported.bookmarks} bookmarks, ${res.imported.aliases} aliases, ${res.imported.settings} settings. Restart recommended.`,
+      );
+    } else if (res?.error && res.error !== "Cancelled") {
+      setBackupMessage(`Restore failed: ${res.error}`);
+    }
   };
 
   const changeVaultPassword = async () => {
@@ -1874,6 +1919,38 @@ export function SettingsPage({
                 <p className="settings-note">
                   To remove data for one site at a time, use Privacy & Security → Site data.
                 </p>
+              </section>
+
+              <section className="settings-card">
+                <div className="settings-card-head">
+                  <div>
+                    <h2>Backup &amp; restore</h2>
+                    <p>
+                      Save an encrypted backup of your bookmarks, bookmark bar, quick routes, and
+                      settings. The vault (saved passwords) uses its own master password and is not
+                      included.
+                    </p>
+                  </div>
+                </div>
+                <div className="settings-action-row">
+                  <button
+                    type="button"
+                    className="settings-primary-btn"
+                    disabled={backupBusy !== null}
+                    onClick={() => void exportBackup()}
+                  >
+                    {backupBusy === "export" ? "Exporting…" : "Export encrypted backup…"}
+                  </button>
+                  <button
+                    type="button"
+                    className="settings-secondary-btn"
+                    disabled={backupBusy !== null}
+                    onClick={() => void importBackup()}
+                  >
+                    {backupBusy === "import" ? "Restoring…" : "Restore from backup…"}
+                  </button>
+                </div>
+                {backupMessage && <p className="settings-note">{backupMessage}</p>}
               </section>
 
               <section className="settings-card">

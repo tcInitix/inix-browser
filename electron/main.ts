@@ -3,7 +3,7 @@ import path from "node:path";
 import { configureDevEnvironment } from "./dev-env";
 
 configureDevEnvironment();
-import { tabManager, setupBrowsingSession } from "./tab-manager";
+import { tabManager, setupBrowsingSession, setSidebarWidth } from "./tab-manager";
 import { matchShortcut } from "./shortcuts";
 import { initDatabase } from "./storage/db";
 import { registerAiHandlers } from "./ai/handlers";
@@ -45,6 +45,7 @@ import {
 } from "./updater";
 import { registerRelayHandlers } from "./proxy/handlers";
 import { initRelayOnStartup } from "./proxy/manager";
+import { registerGoogleAuthHandlers } from "./auth/handlers";
 
 declare global {
   // eslint-disable-next-line no-var
@@ -246,6 +247,11 @@ function registerMainIpcHandlers() {
     const win = winFromEvent(e);
     if (win) tabManager.setSidebarOpen(win, open);
   });
+  ipcMain.handle("sidebar:set-width", (e, width: number) => {
+    setSidebarWidth(width);
+    const win = winFromEvent(e);
+    if (win) tabManager.setSidebarOpen(win, true);
+  });
   ipcMain.handle("chrome:set-bookmark-bar", (_e, visible: boolean) => {
     tabManager.setBookmarkBarVisible(visible);
     return true;
@@ -297,6 +303,7 @@ async function bootstrap() {
     startHistoryPurgeScheduler();
     startTabFreezer();
     registerMainIpcHandlers();
+    registerGoogleAuthHandlers();
     registerRelayHandlers();
     initAutoUpdater(() => mainWindow);
     setUpdateInstallHook(() => {

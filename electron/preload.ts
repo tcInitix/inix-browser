@@ -99,6 +99,11 @@ contextBridge.exposeInMainWorld("inix", {
     print: (tabId: string) => ipcRenderer.invoke("browser:print", tabId),
     getReaderContent: (tabId: string) =>
       ipcRenderer.invoke("browser:reader", tabId) as Promise<{ title: string; url: string; text: string } | null>,
+    capturePage: (tabId: string) =>
+      ipcRenderer.invoke("browser:capture-page", tabId) as Promise<string | null>,
+    setMuted: (tabId: string, muted: boolean) =>
+      ipcRenderer.invoke("browser:set-muted", tabId, muted) as Promise<boolean>,
+    isMuted: (tabId: string) => ipcRenderer.invoke("browser:is-muted", tabId) as Promise<boolean>,
     panicSync: (urls: string[]) =>
       ipcRenderer.invoke("panic:sync", urls) as Promise<
         Array<{ tabId: string; url: string; title: string; isLoading: boolean }>
@@ -153,6 +158,27 @@ contextBridge.exposeInMainWorld("inix", {
     revokeOrigin: (partition: string, origin: string) =>
       ipcRenderer.invoke("permission:revoke-origin", partition, origin),
   },
+  googleAuth: {
+    complete: (tabId: string) =>
+      ipcRenderer.invoke("google-auth:complete", tabId) as Promise<{
+        ok: boolean;
+        imported: number;
+        skipped: number;
+        error?: string;
+      }>,
+    cancel: (tabId: string) => ipcRenderer.invoke("google-auth:cancel", tabId) as Promise<boolean>,
+    reopen: (tabId: string) => ipcRenderer.invoke("google-auth:reopen", tabId) as Promise<boolean>,
+    onStarted: (
+      callback: (payload: { tabId: string; browser: "chrome" | "edge"; browserLabel: string }) => void
+    ) => {
+      const handler = (
+        _e: IpcRendererEvent,
+        payload: { tabId: string; browser: "chrome" | "edge"; browserLabel: string }
+      ) => callback(payload);
+      ipcRenderer.on("google-auth:started", handler);
+      return () => ipcRenderer.removeListener("google-auth:started", handler);
+    },
+  },
   siteData: {
     clear: (opts: { cookies?: boolean; cache?: boolean; storage?: boolean; privateOnly?: boolean }) =>
       ipcRenderer.invoke("site-data:clear", opts),
@@ -193,6 +219,7 @@ contextBridge.exposeInMainWorld("inix", {
   },
   sidebar: {
     setOpen: (open: boolean) => ipcRenderer.invoke("sidebar:set-open", open),
+    setWidth: (width: number) => ipcRenderer.invoke("sidebar:set-width", width),
   },
   chrome: {
     setBookmarkBar: (visible: boolean) => ipcRenderer.invoke("chrome:set-bookmark-bar", visible),
@@ -463,5 +490,19 @@ contextBridge.exposeInMainWorld("inix", {
   },
   app: {
     factoryReset: () => ipcRenderer.invoke("app:factory-reset") as Promise<boolean>,
+  },
+  backup: {
+    export: (passphrase: string) =>
+      ipcRenderer.invoke("backup:export", passphrase) as Promise<{
+        ok: boolean;
+        path?: string;
+        error?: string;
+      }>,
+    import: (passphrase: string) =>
+      ipcRenderer.invoke("backup:import", passphrase) as Promise<{
+        ok: boolean;
+        imported?: { bookmarks: number; aliases: number; settings: number };
+        error?: string;
+      }>,
   },
 });

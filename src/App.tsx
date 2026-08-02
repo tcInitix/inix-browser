@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { BrowserHeader } from "./components/BrowserHeader";
 import { NavBar, type AddressBarHandle } from "./components/NavBar";
@@ -12,6 +12,7 @@ import { FindBar } from "./components/FindBar";
 import { DownloadsPanel } from "./components/DownloadsPanel";
 import { ReaderView } from "./components/ReaderView";
 import { PermissionPrompt } from "./components/PermissionPrompt";
+import { GoogleAuthPrompt } from "./components/GoogleAuthPrompt";
 import { SavePasswordPrompt, type SavePasswordOffer } from "./components/SavePasswordPrompt";
 import { VaultUnlockModal } from "./components/VaultUnlockModal";
 import { BookmarkBar } from "./components/BookmarkBar";
@@ -20,9 +21,12 @@ import { OnboardingFlow, type OnboardingResult } from "./components/OnboardingFl
 import { BootSplash } from "./components/BootSplash";
 import { PanicSetup } from "./components/PanicSetup";
 import { StatusBar } from "./components/StatusBar";
+import { CommandPalette, type CommandItem } from "./components/CommandPalette";
+import { ScreenshotModal } from "./components/ScreenshotModal";
+import { BookmarkSavePopover } from "./components/BookmarkSavePopover";
 import { ChromeOverlayProvider } from "./chrome/ChromeOverlayContext";
 import { settingsShellUrl, type SettingsLinkTarget } from "./utils/settings-url";
-import type { PermissionRequest, InixSettings } from "./inix.d";
+import type { PermissionRequest, GoogleAuthSession, InixSettings } from "./inix.d";
 import { parsePanicUrls, serializePanicUrls, normalizePanicUrls } from "./utils/panic";
 import { applyFontScale, applyThemeMode, watchSystemTheme } from "./utils/apply-appearance";
 
@@ -55,19 +59,28 @@ export default function App() {
   const [sessionReady, setSessionReady] = useState(false);
   const [bootDone, setBootDone] = useState(false);
   const [updateCheckDone, setUpdateCheckDone] = useState(false);
-  const [bootBlockedByUpdate, setBootBlockedByUpdate] = useState(false);
   const [bootStatus, setBootStatus] = useState<string | undefined>(undefined);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [aiInject, setAiInject] = useState<AiInjectRequest | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [screenshotOpen, setScreenshotOpen] = useState(false);
+  const [screenshotDataUrl, setScreenshotDataUrl] = useState<string | null>(null);
+  const [bookmarkPopover, setBookmarkPopover] = useState<{
+    id: number;
+    title: string;
+    tags: string[];
+    url: string;
+  } | null>(null);
   const [bookmarked, setBookmarked] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [findOpen, setFindOpen] = useState(false);
   const [downloadsOpen, setDownloadsOpen] = useState(false);
   const [readerContent, setReaderContent] = useState<{ title: string; url: string; text: string } | null>(null);
   const [permissionRequest, setPermissionRequest] = useState<PermissionRequest | null>(null);
+  const [googleAuthSession, setGoogleAuthSession] = useState<GoogleAuthSession | null>(null);
   const [chromeOverlayActive, setChromeOverlayActive] = useState(false);
   const [savePasswordOffer, setSavePasswordOffer] = useState<SavePasswordOffer | null>(null);
   const [vaultUnlockForSave, setVaultUnlockForSave] = useState(false);
@@ -75,6 +88,7 @@ export default function App() {
   const [immersive, setImmersive] = useState(false);
   const [privateWindow, setPrivateWindow] = useState(false);
   const [bookmarkBarEnabled, setBookmarkBarEnabled] = useState(false);
+  const [tabBarOrientation, setTabBarOrientation] = useState<"horizontal" | "vertical">("horizontal");
   const [restoreTabsOnLaunch, setRestoreTabsOnLaunch] = useState(true);
   const closeWindowWithLastTab = useRef(false);
   const themeModeRef = useRef<InixSettings["theme_mode"]>("dark");
@@ -87,6 +101,7 @@ export default function App() {
     setRestoreTabsOnLaunch(s.restore_tabs_on_launch);
     closeWindowWithLastTab.current = s.close_window_with_last_tab;
     setBookmarkBarEnabled(s.bookmark_bar_enabled);
+    setTabBarOrientation(s.tab_bar_orientation);
   }, []);
   const [bookmarkBarRefresh, setBookmarkBarRefresh] = useState(0);
   const [updateState, setUpdateState] = useState<UpdateState>({ status: "idle" });
@@ -113,6 +128,7 @@ export default function App() {
     onboardingOpen ||
     panicSetupOpen ||
     !!permissionRequest ||
+    !!googleAuthSession ||
     !!savePasswordOffer ||
     vaultUnlockForSave ||
     updateState.status === "downloading" ||
@@ -536,6 +552,21 @@ export default function App() {
     setTabs((prev) => prev.map((t) => (t.id === id ? { ...t, pinned: !t.pinned } : t)));
   }, []);
 
+  const setTabGroup = useCallback(
+    (id: string, group: { id: string; name: string; color: string } | null) => {
+      setTabs((prev) =>
+        prev.map((t) =>
+          t.id === id
+            ? group
+              ? { ...t, groupId: group.id, groupName: group.name, groupColor: group.color }
+              : { ...t, groupId: undefined, groupName: undefined, groupColor: undefined }
+            : t,
+        ),
+      );
+    },
+    [],
+  );
+
   const duplicateTab = useCallback(
     (id: string) => {
       const source = tabs.find((t) => t.id === id);
@@ -812,6 +843,47 @@ export default function App() {
         case "panic":
           void togglePanic();
           break;
+        case "bookmark-toggle":
+          void toggleBookmark();
+          break;
+        case "command-palette":
+          setCommandPaletteOpen(true);
+          break;
+        case "close-window":
+          window.inix?.window.close();
+          break;
+        case "clear-browsing-data":
+          openSettings("privacy");
+          break;
+        case "screenshot":
+          void (async () => {
+            const dataUrl = await window.inix?.browser.capturePage?.(activeTabId);
+            if (dataUrl) {
+              setScreenshotDataUrl(dataUrl);
+              setScreenshotOpen(true);
+            } else {
+              showToast("Cannot capture this page");
+            }
+          })();
+          break;
+        case "jump-tab-1":
+        case "jump-tab-2":
+        case "jump-tab-3":
+        case "jump-tab-4":
+        case "jump-tab-5":
+        case "jump-tab-6":
+        case "jump-tab-7":
+        case "jump-tab-8": {
+          const num = parseInt(action.slice("jump-tab-".length), 10);
+          const nonPinnedOrPinned = tabs;
+          if (num >= 1 && num <= nonPinnedOrPinned.length) {
+            setActiveTabId(nonPinnedOrPinned[num - 1].id);
+          }
+          break;
+        }
+        case "jump-tab-last":
+          if (tabs.length > 0) setActiveTabId(tabs[tabs.length - 1].id);
+          break;
       }
     });
     return () => unsub?.();
@@ -852,7 +924,17 @@ export default function App() {
       if (result?.ok) {
         setBookmarked(true);
         setBookmarkBarRefresh((k) => k + 1);
-        showToast(bookmarkBarEnabled ? "Saved · added to bookmarks bar" : "Saved · Inix Archive ready");
+        if (result.bookmark) {
+          const tags = result.bookmark.tags
+            ? result.bookmark.tags.split(",").map((t) => t.trim()).filter(Boolean)
+            : [];
+          setBookmarkPopover({
+            id: result.bookmark.id,
+            title: result.bookmark.title,
+            tags,
+            url: result.bookmark.url,
+          });
+        }
       } else {
         showToast(result?.error ?? "Bookmark failed");
       }
@@ -864,6 +946,139 @@ export default function App() {
     if (content?.text) setReaderContent(content);
     else showToast("Reader view unavailable for this page");
   }, [activeTabId]);
+
+  const paletteCommands: CommandItem[] = useMemo(() => {
+    const items: CommandItem[] = [
+      {
+        id: "new-tab",
+        label: "New tab",
+        category: "Tabs",
+        shortcut: "Ctrl+T",
+        keywords: "open",
+        run: () => addTab(),
+      },
+      {
+        id: "new-private-tab",
+        label: "New private tab",
+        category: "Tabs",
+        shortcut: "Ctrl+Shift+N",
+        keywords: "incognito private",
+        run: () => addTab(true),
+      },
+      {
+        id: "close-tab",
+        label: "Close current tab",
+        category: "Tabs",
+        shortcut: "Ctrl+W",
+        run: () => closeTab(activeTabId),
+      },
+      {
+        id: "reader",
+        label: "Toggle reader view",
+        category: "Page",
+        shortcut: "Ctrl+Alt+R",
+        keywords: "distraction free article",
+        run: () => void openReaderMode(),
+      },
+      {
+        id: "find",
+        label: "Find in page",
+        category: "Page",
+        shortcut: "Ctrl+F",
+        run: () => setFindOpen(true),
+      },
+      {
+        id: "downloads",
+        label: "Open downloads",
+        category: "Browser",
+        shortcut: "Ctrl+J",
+        run: () => setDownloadsOpen(true),
+      },
+      {
+        id: "home",
+        label: "Go home",
+        category: "Browser",
+        run: () => goHome(),
+      },
+      {
+        id: "toggle-ai",
+        label: "Toggle AI sidebar",
+        category: "Browser",
+        shortcut: "Ctrl+Shift+A",
+        keywords: "assistant",
+        run: () => setSidebarOpen((v) => !v),
+      },
+      {
+        id: "panic",
+        label: "Toggle panic mode",
+        category: "Privacy",
+        shortcut: "Ctrl+Shift+P",
+        keywords: "safe hide",
+        run: () => void togglePanic(),
+      },
+      {
+        id: "settings",
+        label: "Open settings",
+        category: "Browser",
+        run: () => openSettings(),
+      },
+      {
+        id: "settings-privacy",
+        label: "Privacy settings",
+        category: "Settings",
+        keywords: "cookies data cache",
+        run: () => openSettings("privacy"),
+      },
+      {
+        id: "settings-appearance",
+        label: "Appearance settings",
+        category: "Settings",
+        keywords: "theme dark light font",
+        run: () => openSettings("appearance"),
+      },
+      {
+        id: "settings-vault",
+        label: "Vault settings",
+        category: "Settings",
+        keywords: "password encrypt",
+        run: () => openSettings("vault"),
+      },
+      {
+        id: "library",
+        label: "Open library",
+        category: "Browser",
+        keywords: "bookmarks canvas",
+        run: () => navigate("inix://library"),
+      },
+    ];
+    // Add jump-to-tab commands for open tabs
+    tabs.slice(0, 20).forEach((t, idx) => {
+      items.push({
+        id: `switch-tab-${t.id}`,
+        label: `Switch to: ${t.title || t.url || "Tab"}`,
+        hint: t.url,
+        category: "Open tabs",
+        shortcut: idx < 8 ? `Ctrl+${idx + 1}` : undefined,
+        keywords: `${t.url} ${t.title}`,
+        run: () => setActiveTabId(t.id),
+      });
+    });
+    return items;
+  }, [
+    activeTabId,
+    tabs,
+    addTab,
+    closeTab,
+    setActiveTabId,
+    goHome,
+    togglePanic,
+    openSettings,
+    openReaderMode,
+    navigate,
+    setFindOpen,
+    setDownloadsOpen,
+    setSidebarOpen,
+  ]);
 
   useEffect(() => {
     const unsub = window.inix?.autofill.onSaveOffer((offer) => setSavePasswordOffer(offer));
@@ -899,9 +1114,11 @@ export default function App() {
     const unsubDismiss = window.inix?.permission.onDismiss(({ id }) => {
       setPermissionRequest((prev) => (prev?.id === id ? null : prev));
     });
+    const unsubGoogleAuth = window.inix?.googleAuth.onStarted((session) => setGoogleAuthSession(session));
     return () => {
       unsubRequest?.();
       unsubDismiss?.();
+      unsubGoogleAuth?.();
     };
   }, []);
 
@@ -924,7 +1141,6 @@ export default function App() {
           releaseNotes: info.releaseNotes,
         });
         if (!bootDoneRef.current) {
-          setBootBlockedByUpdate(true);
           setBootStatus("Update available");
         }
         finishBootUpdateCheck();
@@ -999,18 +1215,22 @@ export default function App() {
   }, [navigate, activeTabId]);
 
   useEffect(() => {
-    const unsub = window.inix?.downloads.onUpdated(() => {
-      showToast("Download updated", 2000);
+    const unsub = window.inix?.downloads.onUpdated((record) => {
+      // Only toast on completion or failure — not every progress update
+      if (record.state === "completed") {
+        showToast(`Download complete: ${record.filename}`, 3000);
+      } else if (record.state === "interrupted") {
+        showToast(`Download failed: ${record.filename}`, 4000);
+      } else if (record.state === "cancelled") {
+        showToast(`Download cancelled: ${record.filename}`, 2000);
+      }
     });
     return () => unsub?.();
   }, []);
 
   const handleUpdateDismiss = () => {
     setUpdateState({ status: "idle" });
-    if (!bootDone) {
-      setBootBlockedByUpdate(false);
-      setBootStatus(undefined);
-    }
+    if (!bootDone) setBootStatus(undefined);
   };
 
   const updatePrompt = (
@@ -1036,9 +1256,8 @@ export default function App() {
     return (
       <>
         <BootSplash
-          ready={sessionReady && !!activeTab && updateCheckDone && !bootBlockedByUpdate}
+          ready={sessionReady && !!activeTab && updateCheckDone}
           statusText={bootStatus}
-          waitingForUpdate={bootBlockedByUpdate}
           onFinish={() => setBootDone(true)}
         />
         <div className="boot-update-layer">{updatePrompt}</div>
@@ -1097,7 +1316,7 @@ export default function App() {
 
   return (
     <ChromeOverlayProvider onActiveChange={setChromeOverlayActive}>
-    <div className={`inix-shell${sidebarOpen ? " sidebar-open" : ""}${immersive ? " immersive" : ""}${bookmarkBarEnabled ? " bookmark-bar-open" : ""}`}>
+    <div className={`inix-shell${sidebarOpen ? " sidebar-open" : ""}${immersive ? " immersive" : ""}${bookmarkBarEnabled ? " bookmark-bar-open" : ""}${tabBarOrientation === "vertical" ? " vertical-tabs" : ""}`}>
       <BrowserHeader
         onOpenSettings={openSettings}
         onOpenLibrary={openLibrary}
@@ -1113,6 +1332,12 @@ export default function App() {
         onPin={pinTab}
         onDuplicate={duplicateTab}
         onReorder={reorderTabs}
+        onSetGroup={setTabGroup}
+        onToggleMute={(id) => {
+          const t = tabs.find((tb) => tb.id === id);
+          if (!t) return;
+          void window.inix?.browser.setMuted?.(id, !t.muted);
+        }}
       />
       <NavBar
         ref={addressBarRef}
@@ -1133,6 +1358,10 @@ export default function App() {
         bookmarked={bookmarked}
         aiOpen={sidebarOpen}
         onOpenSettings={openSettings}
+      />
+      <div
+        className={`loading-progress-bar${activeTab.isLoading && !activeTab.frozen ? " loading-progress-bar-active" : ""}`}
+        aria-hidden="true"
       />
       {bookmarkBarEnabled && !immersive && (
         <BookmarkBar
@@ -1191,12 +1420,75 @@ export default function App() {
         }}
       />
 
+      <GoogleAuthPrompt
+        session={googleAuthSession}
+        onComplete={async () => {
+          if (!googleAuthSession) return;
+          const result = await window.inix?.googleAuth.complete(googleAuthSession.tabId);
+          if (result?.ok) {
+            setGoogleAuthSession(null);
+            showToast(`Signed in — imported ${result.imported} cookies`);
+            return;
+          }
+          throw new Error(result?.error ?? "Could not import Google session.");
+        }}
+        onCancel={() => {
+          if (googleAuthSession) {
+            void window.inix?.googleAuth.cancel(googleAuthSession.tabId);
+          }
+          setGoogleAuthSession(null);
+        }}
+        onReopen={() => {
+          if (googleAuthSession) {
+            void window.inix?.googleAuth.reopen(googleAuthSession.tabId);
+          }
+        }}
+      />
+
       <SavePasswordPrompt
         offer={savePasswordOffer}
         onDismiss={() => setSavePasswordOffer(null)}
-        onSave={() => {
+        onSave={(password) => {
           if (!savePasswordOffer) return;
-          void persistSavePasswordOffer(savePasswordOffer);
+          void persistSavePasswordOffer({ ...savePasswordOffer, password });
+        }}
+      />
+
+      <CommandPalette
+        open={commandPaletteOpen}
+        onClose={() => setCommandPaletteOpen(false)}
+        commands={paletteCommands}
+      />
+
+      <ScreenshotModal
+        open={screenshotOpen}
+        dataUrl={screenshotDataUrl}
+        onClose={() => {
+          setScreenshotOpen(false);
+          setScreenshotDataUrl(null);
+        }}
+      />
+
+      <BookmarkSavePopover
+        open={!!bookmarkPopover}
+        bookmarkId={bookmarkPopover?.id}
+        initialTitle={bookmarkPopover?.title}
+        initialTags={bookmarkPopover?.tags}
+        onClose={() => setBookmarkPopover(null)}
+        onRemove={async () => {
+          if (!bookmarkPopover) return;
+          await window.inix?.bookmarks.remove(bookmarkPopover.url);
+          setBookmarked(false);
+          setBookmarkBarRefresh((k) => k + 1);
+          setBookmarkPopover(null);
+          showToast("Removed from Library");
+        }}
+        onSave={async ({ tags }) => {
+          if (!bookmarkPopover) return;
+          await window.inix?.bookmarks.setTags(bookmarkPopover.id, tags);
+          setBookmarkBarRefresh((k) => k + 1);
+          setBookmarkPopover(null);
+          showToast("Saved");
         }}
       />
 

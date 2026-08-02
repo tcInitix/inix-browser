@@ -51,6 +51,41 @@ export function AISidebar({
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const wasOpenRef = useRef(false);
   const [pageReadable, setPageReadable] = useState(hasPage);
+  const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
+    const saved = parseInt(localStorage.getItem("inix.ai-sidebar-width") ?? "", 10);
+    return Number.isFinite(saved) && saved >= 280 && saved <= 900 ? saved : 360;
+  });
+
+  const startResize = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = sidebarWidth;
+    const onMove = (ev: MouseEvent) => {
+      const delta = startX - ev.clientX;
+      const next = Math.max(280, Math.min(900, startWidth + delta));
+      setSidebarWidth(next);
+    };
+    const onUp = () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+      localStorage.setItem(
+        "inix.ai-sidebar-width",
+        String(document.querySelector<HTMLElement>(".ai-sidebar")?.offsetWidth ?? startWidth)
+      );
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "ew-resize";
+  }, [sidebarWidth]);
+
+  // Update the CSS variable so tab-manager layout math (main process) uses new width via IPC-free CSS
+  useEffect(() => {
+    document.documentElement.style.setProperty("--sidebar-width", `${sidebarWidth}px`);
+    if (open) void window.inix?.sidebar.setWidth?.(sidebarWidth);
+  }, [sidebarWidth, open]);
 
   const focusInput = useCallback(() => {
     requestAnimationFrame(() => inputRef.current?.focus());
@@ -289,7 +324,21 @@ export function AISidebar({
   if (!open) return null;
 
   return (
-    <aside className="ai-sidebar">
+    <aside
+      className="ai-sidebar"
+      style={{ width: `${sidebarWidth}px` }}
+    >
+      <div
+        className="ai-sidebar-resize-handle"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize AI sidebar"
+        onMouseDown={startResize}
+        onDoubleClick={() => {
+          setSidebarWidth(360);
+          localStorage.setItem("inix.ai-sidebar-width", "360");
+        }}
+      />
       <header className="ai-sidebar-header">
         <div>
           <h2>Inix AI</h2>

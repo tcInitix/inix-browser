@@ -14,6 +14,7 @@ export type StartupMode = "restore" | "new_tab" | "homepage" | "urls";
 export type ThemeMode = "dark" | "light" | "system";
 export type UiFontScale = "small" | "medium" | "large";
 export type PermissionDefault = "ask" | "allow" | "block";
+export type TabBarOrientation = "horizontal" | "vertical";
 
 export function getSetting(key: string): string {
   const rows = runQuery<{ value: string }>("SELECT value FROM settings WHERE key = ?", [key]);
@@ -50,6 +51,7 @@ export interface Settings {
   restore_tabs_on_launch: boolean;
   private_mode_shortcut: "window" | "tab";
   bookmark_bar_enabled: boolean;
+  tab_bar_orientation: TabBarOrientation;
   panic_configured: boolean;
   panic_urls: string[];
   new_tab_quick_links: QuickLinkSetting[];
@@ -203,6 +205,7 @@ export function getSettings(): Settings {
     restore_tabs_on_launch: restoreTabs,
     private_mode_shortcut: getSetting("private_mode_shortcut") === "tab" ? "tab" : "window",
     bookmark_bar_enabled: parseBool(getSetting("bookmark_bar_enabled")),
+    tab_bar_orientation: getSetting("tab_bar_orientation") === "vertical" ? "vertical" : "horizontal",
     panic_configured: parseBool(getSetting("panic_configured")),
     panic_urls: parseJsonStringArray(getSetting("panic_urls")),
     new_tab_quick_links: parseQuickLinksSetting(getSetting("new_tab_quick_links")),
@@ -254,4 +257,39 @@ export function resetAllSettingsToDefaults(): void {
   for (const [key, value] of Object.entries(DEFAULT_SETTINGS)) {
     setSetting(key, value);
   }
+}
+
+/** Per-host zoom persistence — used to apply saved zoom when navigating to a site. */
+function loadHostZoomMap(): Record<string, number> {
+  const raw = getSetting("zoom_by_host");
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (parsed && typeof parsed === "object") {
+      const out: Record<string, number> = {};
+      for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
+        if (typeof v === "number" && Number.isFinite(v)) out[k] = v;
+      }
+      return out;
+    }
+  } catch {
+    // fall through
+  }
+  return {};
+}
+
+export function getZoomForHost(host: string): number | undefined {
+  const map = loadHostZoomMap();
+  return map[host.toLowerCase()];
+}
+
+export function setZoomForHost(host: string, level: number): void {
+  const key = host.toLowerCase();
+  const map = loadHostZoomMap();
+  if (level === 0) {
+    delete map[key];
+  } else {
+    map[key] = level;
+  }
+  setSetting("zoom_by_host", JSON.stringify(map));
 }

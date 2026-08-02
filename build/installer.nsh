@@ -1,5 +1,8 @@
-; Inix NSIS — branding + minimal process close (v0.1.5 style).
-; No custom uninstall hooks — electron-builder handles upgrades.
+; Inix NSIS — branding + close running app before every install/upgrade.
+
+!ifndef nsProcess::FindProcess
+  !include "nsProcess.nsh"
+!endif
 
 !macro customHeader
   !define MUI_FINISHPAGE_NOAUTOCLOSE
@@ -34,28 +37,36 @@ ShowUninstDetails show
   !define MUI_INSTFILESPAGE_SHOWDETAILSCONTROL
 !endif
 
+!macro _InixCloseRunningApp
+  DetailPrint "Closing ${PRODUCT_NAME} if it is running..."
+  StrCpy $R9 0
+  ${DoWhile} $R9 < 12
+    ${nsProcess::FindProcess} "${PRODUCT_FILENAME}.exe" $R0
+    ${If} $R0 != 0
+      ${Break}
+    ${EndIf}
+    nsExec::ExecToLog `taskkill /F /IM "${PRODUCT_FILENAME}.exe" /T`
+    Sleep 1000
+    IntOp $R9 $R9 + 1
+  ${Loop}
+  Sleep 1000
+!macroend
+
+!macro customInit
+  !ifndef BUILD_UNINSTALLER
+    SetDetailsPrint both
+    DetailPrint "Preparing ${PRODUCT_NAME} setup..."
+    RMDir /r "$PLUGINSDIR\old-install"
+    !insertmacro _InixCloseRunningApp
+  !endif
+!macroend
+
 !macro customCheckAppRunning
   !ifdef BUILD_UNINSTALLER
-    !ifndef nsProcess::FindProcess
-      !include "nsProcess.nsh"
-    !endif
     DetailPrint "Closing ${PRODUCT_NAME}..."
-    ${nsProcess::FindProcess} "${PRODUCT_FILENAME}.exe" $R0
-    ${If} $R0 = 0
-      nsExec::Exec `taskkill /f /im "${PRODUCT_FILENAME}.exe" /t`
-      Sleep 1000
-    ${EndIf}
+    !insertmacro _InixCloseRunningApp
   !else
-    ${if} ${isUpdated}
-      DetailPrint "Closing ${PRODUCT_NAME} before installing the update..."
-      StrCpy $R9 0
-      ${DoWhile} $R9 < 10
-        nsExec::ExecToLog `taskkill /F /IM "${PRODUCT_FILENAME}.exe" /T`
-        Sleep 1000
-        IntOp $R9 $R9 + 1
-      ${Loop}
-      Sleep 1500
-    ${endif}
+    !insertmacro _InixCloseRunningApp
   !endif
 !macroend
 
@@ -66,14 +77,13 @@ ShowUninstDetails show
     DetailPrint "Previous version uninstalled successfully."
   ${else}
     DetailPrint "Previous uninstaller failed (code $R0) — removing old files manually..."
-    nsExec::ExecToLog `taskkill /F /IM "${PRODUCT_FILENAME}.exe" /T`
-    Sleep 2000
+    !insertmacro _InixCloseRunningApp
     ${if} $INSTDIR != ""
       RMDir /r "$INSTDIR"
       ${If} ${FileExists} "$INSTDIR\${APP_EXECUTABLE_FILENAME}"
         DetailPrint "Retrying removal of $INSTDIR..."
         Sleep 2000
-        nsExec::ExecToLog `taskkill /F /IM "${PRODUCT_FILENAME}.exe" /T`
+        !insertmacro _InixCloseRunningApp
         RMDir /r "$INSTDIR"
       ${EndIf}
     ${endif}

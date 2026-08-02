@@ -72,6 +72,7 @@ import {
 import { getSettings as getFormattedSettings, syncStartupSettings } from "./settings";
 import { pickDownloadFolder, resolveDownloadDir } from "../downloads/manager";
 import { factoryResetApp } from "./app-reset";
+import { exportEncrypted, importEncrypted } from "./export-import";
 
 export function registerStorageHandlers(): void {
   ipcMain.handle("bookmarks:save-from-tab", async (_e, tabId: string, opts?: SaveBookmarkOptions) =>
@@ -274,6 +275,15 @@ export function registerStorageHandlers(): void {
   ipcMain.handle("app:factory-reset", async () => {
     await factoryResetApp();
     return true;
+  });
+
+  ipcMain.handle("backup:export", async (e, passphrase: string) => {
+    const win = BrowserWindow.fromWebContents(e.sender);
+    return exportEncrypted(win && !win.isDestroyed() ? win : null, passphrase);
+  });
+  ipcMain.handle("backup:import", async (e, passphrase: string) => {
+    const win = BrowserWindow.fromWebContents(e.sender);
+    return importEncrypted(win && !win.isDestroyed() ? win : null, passphrase);
   });
 }
 

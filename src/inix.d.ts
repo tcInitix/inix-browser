@@ -13,6 +13,7 @@ export type StartupMode = "restore" | "new_tab" | "homepage" | "urls";
 export type ThemeMode = "dark" | "light" | "system";
 export type UiFontScale = "small" | "medium" | "large";
 export type PermissionDefault = "ask" | "allow" | "block";
+export type TabBarOrientation = "horizontal" | "vertical";
 
 export type RelayMode = "off" | "inix-tx" | "custom";
 export type RelayStatus = "off" | "connecting" | "connected" | "error";
@@ -48,6 +49,7 @@ export interface InixSettings {
   restore_tabs_on_launch: boolean;
   private_mode_shortcut: "window" | "tab";
   bookmark_bar_enabled: boolean;
+  tab_bar_orientation: TabBarOrientation;
   panic_configured: boolean;
   panic_urls: string[];
   new_tab_quick_links: Array<{ label: string; url: string; icon?: "letter" }>;
@@ -196,6 +198,19 @@ export interface PermissionRequest {
   requestingUrl: string;
 }
 
+export interface GoogleAuthSession {
+  tabId: string;
+  browser: "chrome" | "edge";
+  browserLabel: string;
+}
+
+export interface GoogleAuthImportResult {
+  ok: boolean;
+  imported: number;
+  skipped: number;
+  error?: string;
+}
+
 export interface PermissionGrant {
   partition: string;
   origin: string;
@@ -272,6 +287,9 @@ export interface InixAPI {
     toggleDevTools: (tabId: string) => Promise<void>;
     print: (tabId: string) => Promise<void>;
     getReaderContent: (tabId: string) => Promise<{ title: string; url: string; text: string } | null>;
+    capturePage: (tabId: string) => Promise<string | null>;
+    setMuted: (tabId: string, muted: boolean) => Promise<boolean>;
+    isMuted: (tabId: string) => Promise<boolean>;
     panicSync: (urls: string[]) => Promise<PanicPreloadTab[]>;
     panicActivate: () => Promise<void>;
     panicDeactivate: (urls: string[]) => Promise<void>;
@@ -295,6 +313,12 @@ export interface InixAPI {
     list: () => Promise<PermissionGrant[]>;
     revoke: (partition: string, origin: string, permission: string) => Promise<boolean>;
     revokeOrigin: (partition: string, origin: string) => Promise<number>;
+  };
+  googleAuth: {
+    complete: (tabId: string) => Promise<GoogleAuthImportResult>;
+    cancel: (tabId: string) => Promise<boolean>;
+    reopen: (tabId: string) => Promise<boolean>;
+    onStarted: (callback: (session: GoogleAuthSession) => void) => () => void;
   };
   siteData: {
     clear: (opts: { cookies?: boolean; cache?: boolean; storage?: boolean; privateOnly?: boolean }) => Promise<void>;
@@ -321,6 +345,7 @@ export interface InixAPI {
   };
   sidebar: {
     setOpen: (open: boolean) => Promise<void>;
+    setWidth: (width: number) => Promise<void>;
   };
   chrome: {
     setBookmarkBar: (visible: boolean) => Promise<boolean>;
@@ -505,6 +530,14 @@ export interface InixAPI {
   };
   app: {
     factoryReset: () => Promise<boolean>;
+  };
+  backup: {
+    export: (passphrase: string) => Promise<{ ok: boolean; path?: string; error?: string }>;
+    import: (passphrase: string) => Promise<{
+      ok: boolean;
+      imported?: { bookmarks: number; aliases: number; settings: number };
+      error?: string;
+    }>;
   };
 }
 

@@ -128,6 +128,25 @@ export function LibraryPanel({ onNavigate }: LibraryPanelProps) {
     }
   };
 
+  const handleRenameWorkspace = async (id: number, name: string) => {
+    const ok = await window.inix?.workspaces.rename(id, name);
+    if (ok) {
+      setWorkspaces((prev) => prev.map((ws) => (ws.id === id ? { ...ws, name } : ws)));
+    }
+  };
+
+  const handleDeleteWorkspace = async (id: number) => {
+    if (workspaces.length <= 1) return;
+    const ok = await window.inix?.workspaces.delete(id);
+    if (ok) {
+      const remaining = workspaces.filter((ws) => ws.id !== id);
+      setWorkspaces(remaining);
+      if (activeWsId === id && remaining.length > 0) {
+        setActiveWsId(remaining[0].id);
+      }
+    }
+  };
+
   const emptyCanvasHint =
     totalBookmarks === 0
       ? "Bookmark a page from the toolbar, or import from Chrome in Settings → Library (export bookmarks as HTML first)."
@@ -191,6 +210,8 @@ export function LibraryPanel({ onNavigate }: LibraryPanelProps) {
             activeId={activeWsId}
             onSelect={setActiveWsId}
             onCreate={handleCreateWorkspace}
+            onRename={handleRenameWorkspace}
+            onDelete={handleDeleteWorkspace}
           />
           <p className="library-stats">
             {hasFilters ? (
