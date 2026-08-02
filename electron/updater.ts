@@ -138,7 +138,7 @@ export function installUpdate(): void {
   quittingForUpdate = true;
   beforeInstallHook?.();
 
-  // Let quitAndInstall register the installer spawn, then quit via app.quit().
-  // Closing windows first fires window-all-closed → app.quit() without the installer.
-  autoUpdater.quitAndInstall(false, true);
+  // Silent NSIS (/S) + relaunch after install. Do not close windows first —
+  // that fires window-all-closed → app.quit() without spawning the installer.
+  autoUpdater.quitAndInstall(true, true);
 }

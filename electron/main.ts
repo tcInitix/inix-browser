@@ -48,8 +48,21 @@ declare global {
   var __inixMainBootstrapped: boolean | undefined;
 }
 
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+}
+
 let mainWindow: BrowserWindow | null = null;
 const privateWindowIds = new Set<number>();
+
+if (gotSingleInstanceLock) {
+  app.on("second-instance", () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.focus();
+  });
+}
 
 function winFromEvent(e: IpcMainInvokeEvent | { sender: Electron.WebContents }): BrowserWindow | null {
   return BrowserWindow.fromWebContents(e.sender);
@@ -283,30 +296,32 @@ async function bootstrap() {
   tabManager.setBookmarkBarVisible(getSettings().bookmark_bar_enabled);
 }
 
-app.whenReady().then(() => bootstrap());
+if (gotSingleInstanceLock) {
+  app.whenReady().then(() => bootstrap());
 
-app.on("activate", () => {
-  if (BrowserWindow.getAllWindows().length === 0) createWindow();
-});
+  app.on("activate", () => {
+    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+  });
 
-app.on("before-quit", () => {
-  if (isQuittingForUpdate()) return;
-  const settings = getSettings();
-  if (settings.clear_cookies_on_exit) {
-    void clearBrowsingData({ cookies: true, storage: true });
-  }
-  if (settings.clear_cache_on_exit) {
-    void clearBrowsingData({ cache: true });
-  }
-  purgeOnAppClose();
-  sessionManager.flush(true);
-  stopTabFreezer();
-  stopHistoryPurgeScheduler();
-  onAppQuitVault();
-});
+  app.on("before-quit", () => {
+    if (isQuittingForUpdate()) return;
+    const settings = getSettings();
+    if (settings.clear_cookies_on_exit) {
+      void clearBrowsingData({ cookies: true, storage: true });
+    }
+    if (settings.clear_cache_on_exit) {
+      void clearBrowsingData({ cache: true });
+    }
+    purgeOnAppClose();
+    sessionManager.flush(true);
+    stopTabFreezer();
+    stopHistoryPurgeScheduler();
+    onAppQuitVault();
+  });
 
-app.on("window-all-closed", () => {
-  if (process.platform !== "darwin" && !isQuittingForUpdate()) {
-    app.quit();
-  }
-});
+  app.on("window-all-closed", () => {
+    if (process.platform !== "darwin" && !isQuittingForUpdate()) {
+      app.quit();
+    }
+  });
+}

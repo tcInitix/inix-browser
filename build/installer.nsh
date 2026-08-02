@@ -1,7 +1,6 @@
-; Inix NSIS customization — branding, update-safe shutdown, install activity log.
+; Inix NSIS customization — branding + uninstall process-tree kill.
+; Install/update process close uses electron-builder's default _CHECK_APP_RUNNING.
 
-; _CHECK_APP_RUNNING (via customCheckAppRunning) needs GetProcessInfo; include it here
-; because this file is parsed before allowOnlyOneInstallerInstance.nsh.
 !include "getProcessInfo.nsh"
 Var pid
 
@@ -184,18 +183,13 @@ ShowUninstDetails show
   !insertmacro MUI_UNPAGE_WELCOME
 !macroend
 
-; Install/update: use electron-builder's default close/retry dialog (no preInit kill).
-; Uninstall: force-kill the full process tree before file removal.
+; Thin wrapper so our getProcessInfo / $pid includes stay valid.
+; Install: electron-builder default only. Uninstall: force-kill process tree first.
 !macro customCheckAppRunning
-  SetDetailsPrint both
-  DetailPrint "Checking for running ${PRODUCT_NAME}..."
   !ifdef BUILD_UNINSTALLER
     !insertmacro inixForceCloseAppCall
   !endif
   !insertmacro _CHECK_APP_RUNNING
-  !ifndef BUILD_UNINSTALLER
-    DetailPrint "Ready to install ${PRODUCT_NAME} ${VERSION}."
-  !endif
 !macroend
 
 !ifndef BUILD_UNINSTALLER
@@ -208,24 +202,7 @@ ShowUninstDetails show
   !macroend
 !endif
 
-!macro customFiles_x64
-  DetailPrint "Extracting 64-bit application package..."
-!macroend
-
-!macro customFiles_ia32
-  DetailPrint "Extracting 32-bit application package..."
-!macroend
-
-!macro customFiles_arm64
-  DetailPrint "Extracting ARM64 application package..."
-!macroend
-
 !macro customInstall
-  DetailPrint "Copying program files completed."
-  DetailPrint "Writing registry entries..."
-  DetailPrint "Creating Start Menu shortcut..."
-  DetailPrint "Creating desktop shortcut (if enabled)..."
-  DetailPrint "Registering uninstall information..."
   DetailPrint "Cleaning up files from the previous version..."
   ClearErrors
   RMDir /r "$PLUGINSDIR\old-install"
@@ -242,11 +219,8 @@ ShowUninstDetails show
 !macro customUnInstall
   SetDetailsPrint both
   !insertmacro inixForceCloseAppCall
-  DetailPrint "Removing ${PRODUCT_NAME} shortcuts..."
-  DetailPrint "Removing program files..."
   DetailPrint "Removing staged application files..."
   ClearErrors
   RMDir /r "$PLUGINSDIR\old-install"
-  DetailPrint "Cleaning up registry entries..."
   DetailPrint "${PRODUCT_NAME} was removed from this computer."
 !macroend

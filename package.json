@@ -1,6 +1,6 @@
 {
   "name": "inix-browser",
-  "version": "0.1.22",
+  "version": "0.1.23",
   "description": "Inix — a fast, private browser",
   "homepage": "https://github.com/tcInitix/inix-browser",
   "main": "dist-electron/main.js",
@@ -67,7 +67,8 @@
     "win": {
       "target": "nsis",
       "icon": "build/icon.ico",
-      "signAndEditExecutable": false
+      "signAndEditExecutable": false,
+      "artifactName": "Inix-Setup-${version}.${ext}"
     },
     "nsis": {
       "include": "build/installer.nsh",
