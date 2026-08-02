@@ -9,6 +9,8 @@ import {
 import { VaultUnlockModal } from "./VaultUnlockModal";
 import { Switch } from "./Switch";
 import { serializePanicUrls, normalizePanicUrls } from "../utils/panic";
+import { filterCredentials, credentialHostname } from "../utils/credential-search";
+import { parseSettingsUrl } from "../utils/settings-url";
 import { friendlyUpdateError, isTechnicalUpdateDump, prepareReleaseNotes } from "../utils/update-text";
 import { MarkdownText } from "./MarkdownText";
 import type { InixSettings } from "../inix.d";
@@ -26,6 +28,8 @@ import {
   type StandardSettingsState,
 } from "./settings/StandardSettingsSections";
 import { RegionRelaySettingsSection } from "./settings/RegionRelaySettingsSection";
+import { BrowserProfileEditor } from "./BrowserProfileEditor";
+import { ProfileAvatar } from "./ProfileAvatar";
 
 type AiProvider = "local" | "api";
 
@@ -180,6 +184,7 @@ const EMPTY_AUTOFILL: AutofillFormData = {
 };
 
 interface SettingsPageProps {
+  settingsUrl?: string;
   onNavigate: (url: string) => void;
   onAliasesChanged?: (map: Record<string, string>) => void;
   onBookmarkBarChange?: (enabled: boolean) => void;
@@ -189,6 +194,7 @@ interface SettingsPageProps {
 }
 
 export function SettingsPage({
+  settingsUrl = "inix://settings",
   onNavigate,
   onAliasesChanged,
   onBookmarkBarChange,
@@ -235,12 +241,14 @@ export function SettingsPage({
   const [oldVaultPw, setOldVaultPw] = useState("");
   const [newVaultPw, setNewVaultPw] = useState("");
   const [savedCredentials, setSavedCredentials] = useState<StoredCredential[]>([]);
+  const [credentialSearch, setCredentialSearch] = useState("");
   const [autofillProfiles, setAutofillProfiles] = useState<AutofillProfileMeta[]>([]);
   const [selectedAutofillId, setSelectedAutofillId] = useState<number | null>(null);
   const [autofillForm, setAutofillForm] = useState<AutofillFormData>(EMPTY_AUTOFILL);
   const [autofillLabel, setAutofillLabel] = useState("");
   const [browserProfiles, setBrowserProfiles] = useState<BrowserProfile[]>([]);
   const [newProfileName, setNewProfileName] = useState("");
+  const [editingProfileId, setEditingProfileId] = useState<string | null>(null);
   const [appVersion, setAppVersion] = useState("");
   const [bundledReleaseNotes, setBundledReleaseNotes] = useState<string | null>(null);
   const [updateMessage, setUpdateMessage] = useState<string | null>(null);
@@ -414,6 +422,25 @@ export function SettingsPage({
   }, [section, refreshPrivacy, refreshVaultData, refreshAutofill, refreshBrowserProfiles]);
 
   useEffect(() => {
+    const { section: targetSection } = parseSettingsUrl(settingsUrl);
+    if (targetSection) setSection(targetSection);
+  }, [settingsUrl]);
+
+  useEffect(() => {
+    const { section: targetSection, scrollToId } = parseSettingsUrl(settingsUrl);
+    if (!scrollToId || targetSection !== section) return;
+    const frame = requestAnimationFrame(() => {
+      document.getElementById(scrollToId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [settingsUrl, section]);
+
+  useEffect(() => {
+    if (vaultUnlocked) return;
+    setCredentialSearch("");
+  }, [vaultUnlocked]);
+
+  useEffect(() => {
     if (section !== "passwords") return;
     void window.inix?.import.chromeProfiles().then((res) => {
       if (!res) return;
@@ -582,6 +609,16 @@ export function SettingsPage({
     }
     return chatModels[0] ?? null;
   }, [installed, chatModels]);
+
+  const filteredCredentials = useMemo(
+    () => filterCredentials(savedCredentials, credentialSearch),
+    [savedCredentials, credentialSearch]
+  );
+
+  const editingProfile = useMemo(
+    () => browserProfiles.find((p) => p.id === editingProfileId) ?? null,
+    [browserProfiles, editingProfileId]
+  );
 
   const save = async () => {
     const s = window.inix?.settings;
@@ -1396,7 +1433,7 @@ export function SettingsPage({
                   {!vaultUnlocked && (
                     <>
                       <p className="settings-note">
-                        Unlock the vault to use saved passwords for autofill.
+                        Unlock the vault to view saved passwords and use autofill.
                       </p>
                       <button
                         type="button"
@@ -1410,29 +1447,63 @@ export function SettingsPage({
                   {savedCredentials.length === 0 ? (
                     <p className="settings-note">No saved passwords yet.</p>
                   ) : (
-                    <ul className="alias-list">
-                      {savedCredentials.map((c) => (
-                        <li key={c.id}>
-                          <code>{(() => {
-                            try {
-                              return new URL(c.origin).hostname;
-                            } catch {
-                              return c.origin;
-                            }
-                          })()}</code>
-                          <span>{c.username}</span>
-                          <button
-                            type="button"
-                            className="alias-remove"
-                            onClick={() =>
-                              void window.inix?.credentials.remove(c.id).then(() => refreshVaultData())
-                            }
-                          >
-                            ✕
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
+                    <>
+                      {!vaultUnlocked && (
+                        <p className="settings-note">
+                          {savedCredentials.length} saved password{savedCredentials.length === 1 ? "" : "s"} — unlock
+                          the vault to view usernames.
+                        </p>
+                      )}
+                      {vaultUnlocked && (
+                        <label className="settings-field credential-search-field">
+                          <span>Search saved passwords</span>
+                          <input
+                            type="search"
+                            value={credentialSearch}
+                            onChange={(e) => setCredentialSearch(e.target.value)}
+                            placeholder="Site, username, or email…"
+                          />
+                        </label>
+                      )}
+                      {vaultUnlocked && credentialSearch.trim() && (
+                        <p className="settings-note">
+                          {filteredCredentials.length} match{filteredCredentials.length === 1 ? "" : "es"}
+                        </p>
+                      )}
+                      {vaultUnlocked && credentialSearch.trim() && filteredCredentials.length === 0 ? (
+                        <p className="settings-note">No passwords match &ldquo;{credentialSearch}&rdquo;.</p>
+                      ) : (
+                        <ul className="credential-list">
+                          {(vaultUnlocked ? filteredCredentials : savedCredentials).map((c) => (
+                            <li key={c.id}>
+                              <span className="credential-site" title={vaultUnlocked ? c.origin : undefined}>
+                                {credentialHostname(c.origin)}
+                              </span>
+                              <span
+                                className={`credential-user${vaultUnlocked ? "" : " credential-user-masked"}`}
+                                title={vaultUnlocked ? c.username : undefined}
+                              >
+                                {vaultUnlocked ? c.username || "—" : "••••••••"}
+                              </span>
+                              <button
+                                type="button"
+                                className="alias-remove"
+                                aria-label={
+                                  vaultUnlocked
+                                    ? `Remove password for ${credentialHostname(c.origin)}`
+                                    : `Remove saved password for ${credentialHostname(c.origin)}`
+                                }
+                                onClick={() =>
+                                  void window.inix?.credentials.remove(c.id).then(() => refreshVaultData())
+                                }
+                              >
+                                ✕
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </>
                   )}
                 </section>
               )}
@@ -1620,49 +1691,64 @@ export function SettingsPage({
                   Create profile
                 </button>
               </div>
-              <ul className="alias-list">
+              <ul className="profile-list">
                 {browserProfiles.map((p) => (
-                  <li key={p.id}>
-                    {p.avatar ? (
-                      <img src={p.avatar} alt="" className="profile-list-avatar" />
-                    ) : (
-                      <span
-                        className="profile-color-dot"
-                        style={{ background: p.color, width: 10, height: 10, borderRadius: "50%", display: "inline-block" }}
-                      />
-                    )}
-                    <span>{p.name}</span>
-                    {p.id !== "default" ? (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => void window.inix?.profiles.openWindow(p.id)}
-                        >
-                          Open window
-                        </button>
-                        <button
-                          type="button"
-                          className="alias-remove"
-                          onClick={() => {
-                            if (
-                              !confirm(
-                                `Delete profile "${p.name}"? Its cookies, cache, and site data on this device will be erased.`
-                              )
-                            ) {
-                              return;
-                            }
-                            void window.inix?.profiles.delete(p.id).then(() => refreshBrowserProfiles());
-                          }}
-                        >
-                          ✕
-                        </button>
-                      </>
-                    ) : (
-                      <span className="settings-note">Default profile</span>
-                    )}
+                  <li key={p.id} className={editingProfileId === p.id ? "is-editing" : ""}>
+                    <ProfileAvatar name={p.name} color={p.color} avatar={p.avatar} size={28} />
+                    <span className="profile-list-name">{p.name}</span>
+                    <div className="profile-list-actions">
+                      <button
+                        type="button"
+                        className="settings-secondary-btn profile-list-btn"
+                        onClick={() => setEditingProfileId(p.id)}
+                      >
+                        Edit
+                      </button>
+                      {p.id !== "default" ? (
+                        <>
+                          <button
+                            type="button"
+                            className="settings-secondary-btn profile-list-btn"
+                            onClick={() => void window.inix?.profiles.openWindow(p.id)}
+                          >
+                            Open window
+                          </button>
+                          <button
+                            type="button"
+                            className="alias-remove profile-list-btn"
+                            aria-label={`Delete profile ${p.name}`}
+                            onClick={() => {
+                              if (
+                                !confirm(
+                                  `Delete profile "${p.name}"? Its cookies, cache, and site data on this device will be erased.`
+                                )
+                              ) {
+                                return;
+                              }
+                              if (editingProfileId === p.id) setEditingProfileId(null);
+                              void window.inix?.profiles.delete(p.id).then(() => refreshBrowserProfiles());
+                            }}
+                          >
+                            ✕
+                          </button>
+                        </>
+                      ) : (
+                        <span className="settings-note profile-list-default">Default profile</span>
+                      )}
+                    </div>
                   </li>
                 ))}
               </ul>
+              {editingProfile && (
+                <BrowserProfileEditor
+                  profile={editingProfile}
+                  onCancel={() => setEditingProfileId(null)}
+                  onSaved={() => {
+                    setEditingProfileId(null);
+                    void refreshBrowserProfiles();
+                  }}
+                />
+              )}
             </section>
           )}
 

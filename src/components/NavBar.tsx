@@ -1,6 +1,6 @@
 import { useState, useEffect, forwardRef, useImperativeHandle, useRef, type FormEvent, type KeyboardEvent } from "react";
 import type { Tab } from "../types";
-import { isShellUrl } from "../types";
+import { isSettingsUrl, isShellUrl } from "../types";
 import {
   IconBack,
   IconBookmark,
@@ -13,6 +13,7 @@ import {
   IconSparkle,
 } from "./chrome/ChromeIcons";
 import { RelayBadge, RelayPopover, useRelayState } from "./RelayPopover";
+import { useChromeOverlay } from "../chrome/ChromeOverlayContext";
 
 export const INIX_BOOKMARK_DRAG = "application/x-inix-bookmark";
 
@@ -34,7 +35,7 @@ interface NavBarProps {
   onReaderMode: () => void;
   bookmarked: boolean;
   aiOpen: boolean;
-  onOpenSettings?: () => void;
+  onOpenSettings?: (section?: string) => void;
 }
 
 export const NavBar = forwardRef<AddressBarHandle, NavBarProps>(function NavBar(
@@ -61,6 +62,8 @@ export const NavBar = forwardRef<AddressBarHandle, NavBarProps>(function NavBar(
   const [relayOpen, setRelayOpen] = useState(false);
   const [relayState, setRelayEnabled] = useRelayState();
 
+  useChromeOverlay("relay-popover", relayOpen);
+
   useImperativeHandle(ref, () => ({
     focus: () => {
       inputRef.current?.focus();
@@ -70,7 +73,7 @@ export const NavBar = forwardRef<AddressBarHandle, NavBarProps>(function NavBar(
 
   useEffect(() => {
     if (tab.url === "inix://newtab") setInput("");
-    else if (tab.url === "inix://settings") setInput("inix://settings");
+    else if (isSettingsUrl(tab.url)) setInput(tab.url);
     else if (tab.url === "inix://library") setInput("inix://library");
     else setInput(tab.url);
   }, [tab.url, tab.id]);
@@ -145,7 +148,7 @@ export const NavBar = forwardRef<AddressBarHandle, NavBarProps>(function NavBar(
             onOpenSettings
               ? () => {
                   setRelayOpen(false);
-                  onOpenSettings();
+                  onOpenSettings("relay");
                 }
               : undefined
           }

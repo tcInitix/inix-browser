@@ -7,7 +7,7 @@ import { onPageLoaded } from "./storage/capture-service";
 
 import { recordLightVisit } from "./storage/history";
 
-import { resolveInixUrl } from "./storage/inix-url";
+import { resolveInixUrl, isSettingsShellUrl } from "./storage/inix-url";
 
 import { matchShortcut } from "./shortcuts";
 
@@ -1060,7 +1060,7 @@ export class TabManager {
 
 
   async loadInBackground(win: BrowserWindow, tabId: string, url: string, isPrivate = false): Promise<void> {
-    if (url === "inix://library" || url === "inix://settings") {
+    if (url === "inix://library" || isSettingsShellUrl(url)) {
       this.emit(tabId, { url, isLoading: false });
       return;
     }
@@ -1096,7 +1096,7 @@ export class TabManager {
 
   async navigate(win: BrowserWindow, tabId: string, url: string) {
 
-    if (url === "inix://library" || url === "inix://settings") {
+    if (url === "inix://library" || isSettingsShellUrl(url)) {
 
       this.emit(tabId, { url, isLoading: false });
 
@@ -1184,7 +1184,7 @@ export class TabManager {
 
     this.showTab(win, tabId);
 
-    if (url && !url.startsWith("inix://library") && url !== "inix://settings") {
+    if (url && !url.startsWith("inix://library") && !isSettingsShellUrl(url)) {
 
       const current = this.getTabUrl(tabId);
 

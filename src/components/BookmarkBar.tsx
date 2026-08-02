@@ -7,10 +7,12 @@ import {
   type DragEvent,
   type MouseEvent,
 } from "react";
+import { createPortal } from "react-dom";
 import type { BarNode, Bookmark } from "../inix.d";
 import { INIX_BOOKMARK_DRAG } from "./NavBar";
 import { BookmarkIcon } from "./BookmarkIcon";
 import { bookmarkIconMode } from "../utils/bookmark-icon";
+import { useChromeOverlay } from "../chrome/ChromeOverlayContext";
 
 export const INIX_BAR_NODE_DRAG = "application/x-inix-bar-node";
 
@@ -41,8 +43,6 @@ interface FolderDialogState {
   parentId: number | null;
   nodeId?: number;
   value: string;
-  x: number;
-  y: number;
 }
 
 function shortTitle(title: string, url: string): string {
@@ -90,6 +90,11 @@ export function BookmarkBar({
   const [overflowOpen, setOverflowOpen] = useState(false);
   const [folderDialog, setFolderDialog] = useState<FolderDialogState | null>(null);
   const barRef = useRef<HTMLDivElement>(null);
+
+  useChromeOverlay(
+    "bookmark-bar-menus",
+    menu !== null || openFolderId !== null || overflowOpen || folderDialog !== null
+  );
   const trackRef = useRef<HTMLDivElement>(null);
   const measureRef = useRef<HTMLDivElement>(null);
   const folderRefs = useRef<Map<number, HTMLButtonElement>>(new Map());
@@ -154,13 +159,14 @@ export function BookmarkBar({
     const isInsideBarPopup = (target: EventTarget | null) => {
       const el = target as HTMLElement | null;
       return !!el?.closest?.(
-        ".bookmark-bar-overflow-menu, .bookmark-bar-folder-popup, .bookmark-bar-menu, .bookmark-bar-folder-dialog"
+        ".bookmark-bar-overflow-menu, .bookmark-bar-folder-popup, .bookmark-bar-menu, .bookmark-bar-folder-dialog, .bookmark-bar-folder-dialog-backdrop"
       );
     };
     const onDoc = (e: MouseEvent) => {
       const t = e.target as Node;
+      const el = t as HTMLElement;
+      if (el.closest?.(".bookmark-bar-folder-dialog, .bookmark-bar-folder-dialog-backdrop")) return;
       if (barRef.current?.contains(t)) {
-        if (folderDialog && (t as HTMLElement).closest?.(".bookmark-bar-folder-dialog")) return;
         if (overflowRef.current?.contains(t)) return;
         return;
       }
@@ -179,12 +185,19 @@ export function BookmarkBar({
     };
   }, [menu, openFolderId, overflowOpen, folderDialog]);
 
+  const folderDialogKey = folderDialog
+    ? `${folderDialog.mode}:${folderDialog.nodeId ?? "new"}:${folderDialog.parentId ?? "root"}`
+    : null;
+
   useEffect(() => {
-    if (!folderDialog) return;
+    if (!folderDialogKey) return;
     const input = folderInputRef.current;
-    input?.focus();
-    input?.select();
-  }, [folderDialog]);
+    const frame = requestAnimationFrame(() => {
+      input?.focus();
+      input?.select();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [folderDialogKey]);
 
   const notify = () => {
     onChanged?.();
@@ -522,8 +535,6 @@ export function BookmarkBar({
                 mode: "create",
                 parentId: menu.parentId,
                 value: "New folder",
-                x: menu.x,
-                y: menu.y,
               });
               setMenu(null);
             }}
@@ -540,8 +551,6 @@ export function BookmarkBar({
                     parentId: menu.parentId,
                     nodeId: menu.node!.id,
                     value: menu.node?.type === "folder" ? menu.node.title : "",
-                    x: menu.x,
-                    y: menu.y,
                   });
                   setMenu(null);
                 }}
@@ -613,39 +622,52 @@ export function BookmarkBar({
         </div>
       )}
 
-      {folderDialog && (
-        <div
-          className="bookmark-bar-folder-dialog"
-          style={{
-            left: folderDialog.x,
-            top: folderDialog.y + 8,
-          }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <label className="bookmark-bar-folder-dialog-label">
-            {folderDialog.mode === "create" ? "New folder" : "Rename folder"}
-          </label>
-          <input
-            ref={folderInputRef}
-            type="text"
-            className="bookmark-bar-folder-dialog-input"
-            value={folderDialog.value}
-            onChange={(e) => setFolderDialog({ ...folderDialog, value: e.target.value })}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") submitFolderDialog();
-              if (e.key === "Escape") setFolderDialog(null);
-            }}
-          />
-          <div className="bookmark-bar-folder-dialog-actions">
-            <button type="button" className="bookmark-bar-folder-dialog-cancel" onClick={() => setFolderDialog(null)}>
-              Cancel
-            </button>
-            <button type="button" className="bookmark-bar-folder-dialog-save" onClick={submitFolderDialog}>
-              Save
-            </button>
-          </div>
-        </div>
-      )}
+      {folderDialog &&
+        createPortal(
+          <>
+            <button
+              type="button"
+              className="bookmark-bar-folder-dialog-backdrop"
+              aria-label="Close folder dialog"
+              onClick={() => setFolderDialog(null)}
+            />
+            <div
+              className="bookmark-bar-folder-dialog"
+              role="dialog"
+              aria-modal="true"
+              aria-label={folderDialog.mode === "create" ? "New folder" : "Rename folder"}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <label className="bookmark-bar-folder-dialog-label">
+                {folderDialog.mode === "create" ? "New folder" : "Rename folder"}
+                <input
+                  ref={folderInputRef}
+                  type="text"
+                  className="bookmark-bar-folder-dialog-input"
+                  value={folderDialog.value}
+                  onChange={(e) => setFolderDialog({ ...folderDialog, value: e.target.value })}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") submitFolderDialog();
+                    if (e.key === "Escape") setFolderDialog(null);
+                  }}
+                />
+              </label>
+              <div className="bookmark-bar-folder-dialog-actions">
+                <button
+                  type="button"
+                  className="bookmark-bar-folder-dialog-cancel"
+                  onClick={() => setFolderDialog(null)}
+                >
+                  Cancel
+                </button>
+                <button type="button" className="bookmark-bar-folder-dialog-save" onClick={submitFolderDialog}>
+                  Save
+                </button>
+              </div>
+            </div>
+          </>,
+          document.body
+        )}
     </div>
   );
 }

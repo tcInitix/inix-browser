@@ -43,7 +43,7 @@ export function RegionRelaySettingsSection() {
   };
 
   return (
-    <section className="settings-card">
+    <section className="settings-card" id="settings-relay">
       <div className="settings-card-head">
         <div>
           <h2>Region relay</h2>

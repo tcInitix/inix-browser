@@ -20,6 +20,8 @@ import { OnboardingFlow, type OnboardingResult } from "./components/OnboardingFl
 import { BootSplash } from "./components/BootSplash";
 import { PanicSetup } from "./components/PanicSetup";
 import { StatusBar } from "./components/StatusBar";
+import { ChromeOverlayProvider } from "./chrome/ChromeOverlayContext";
+import { settingsShellUrl, type SettingsSectionId } from "./utils/settings-url";
 import type { PermissionRequest, InixSettings } from "./inix.d";
 import { parsePanicUrls, serializePanicUrls, normalizePanicUrls } from "./utils/panic";
 import { applyFontScale, applyThemeMode, watchSystemTheme } from "./utils/apply-appearance";
@@ -66,6 +68,7 @@ export default function App() {
   const [downloadsOpen, setDownloadsOpen] = useState(false);
   const [readerContent, setReaderContent] = useState<{ title: string; url: string; text: string } | null>(null);
   const [permissionRequest, setPermissionRequest] = useState<PermissionRequest | null>(null);
+  const [chromeOverlayActive, setChromeOverlayActive] = useState(false);
   const [savePasswordOffer, setSavePasswordOffer] = useState<SavePasswordOffer | null>(null);
   const [vaultUnlockForSave, setVaultUnlockForSave] = useState(false);
   const pendingSavePassword = useRef<SavePasswordOffer | null>(null);
@@ -115,7 +118,8 @@ export default function App() {
     updateState.status === "downloading" ||
     !!readerContent ||
     searchOpen ||
-    historyOpen;
+    historyOpen ||
+    chromeOverlayActive;
 
   const showToast = (msg: string, ms = 3000) => {
     setToast(msg);
@@ -240,10 +244,14 @@ export default function App() {
     return () => unsub?.();
   }, []);
 
-  const openSettings = useCallback(() => {
-    updateTab(activeTabId, { url: "inix://settings", title: "Settings", isLoading: false });
-    browser()?.hide();
-  }, [activeTabId, updateTab]);
+  const openSettings = useCallback(
+    (section?: SettingsSectionId | "relay") => {
+      const url = settingsShellUrl(section);
+      updateTab(activeTabId, { url, title: "Settings", isLoading: false });
+      browser()?.hide();
+    },
+    [activeTabId, updateTab]
+  );
 
   useEffect(() => {
     if (!sessionReady || privateWindow) return;
@@ -1048,6 +1056,7 @@ export default function App() {
     if (isSettingsUrl(activeTab.url)) {
       return (
         <SettingsPage
+          settingsUrl={activeTab.url}
           onNavigate={navigate}
           onAliasesChanged={(map) => setAliasMap(map)}
           onBookmarkBarChange={setBookmarkBarEnabled}
@@ -1086,6 +1095,7 @@ export default function App() {
   };
 
   return (
+    <ChromeOverlayProvider onActiveChange={setChromeOverlayActive}>
     <div className={`inix-shell${sidebarOpen ? " sidebar-open" : ""}${immersive ? " immersive" : ""}${bookmarkBarEnabled ? " bookmark-bar-open" : ""}`}>
       <BrowserHeader
         onOpenSettings={openSettings}
@@ -1221,5 +1231,6 @@ export default function App() {
 
       {immersive && <div className="immersive-hint">Press F11 to exit fullscreen</div>}
     </div>
+    </ChromeOverlayProvider>
   );
 }

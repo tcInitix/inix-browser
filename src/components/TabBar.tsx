@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import type { Tab } from "../types";
 import { IconClose, IconPlus } from "./chrome/ChromeIcons";
+import { useChromeOverlay } from "../chrome/ChromeOverlayContext";
 
 interface TabBarProps {
   tabs: Tab[];
@@ -31,6 +32,8 @@ export function TabBar({
 }: TabBarProps) {
   const dragIndex = useRef<number | null>(null);
   const [contextMenu, setContextMenu] = useState<{ tabId: string; x: number; y: number } | null>(null);
+
+  useChromeOverlay("tab-context-menu", contextMenu !== null);
 
   const sortedTabs = [...tabs].sort((a, b) => {
     if (a.pinned && !b.pinned) return -1;

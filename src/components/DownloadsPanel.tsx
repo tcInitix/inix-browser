@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { DownloadRecord } from "../inix.d";
+import { useChromeOverlay } from "../chrome/ChromeOverlayContext";
 
 interface DownloadsPanelProps {
   open: boolean;
@@ -8,6 +9,8 @@ interface DownloadsPanelProps {
 
 export function DownloadsPanel({ open, onClose }: DownloadsPanelProps) {
   const [downloads, setDownloads] = useState<DownloadRecord[]>([]);
+
+  useChromeOverlay("downloads-panel", open);
 
   const refresh = useCallback(async () => {
     const list = await window.inix?.downloads.list();

@@ -7,11 +7,16 @@ interface RelayPopoverProps {
   state: RelayState;
   onClose: () => void;
   onToggle: (enabled: boolean) => void;
-  onOpenSettings?: () => void;
+  onOpenSettings?: (section?: string) => void;
 }
 
 export function RelayPopover({ open, state, onClose, onToggle, onOpenSettings }: RelayPopoverProps) {
   const panelRef = useRef<HTMLDivElement>(null);
+
+  const openSettings = (section?: string) => {
+    onClose();
+    onOpenSettings?.(section);
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -79,7 +84,15 @@ export function RelayPopover({ open, state, onClose, onToggle, onOpenSettings }:
       {!state.configured && (
         <p className="relay-popover-warn">
           No relay server configured. Set <code>INIX_RELAY_*</code> environment variables or add a custom
-          proxy in Settings.
+          proxy in{" "}
+          {onOpenSettings ? (
+            <button type="button" className="relay-popover-inline-link" onClick={() => openSettings("relay")}>
+              Settings
+            </button>
+          ) : (
+            "Settings"
+          )}
+          .
         </p>
       )}
 
@@ -88,7 +101,7 @@ export function RelayPopover({ open, state, onClose, onToggle, onOpenSettings }:
       </p>
 
       {onOpenSettings && (
-        <button type="button" className="relay-popover-settings-link" onClick={onOpenSettings}>
+        <button type="button" className="relay-popover-settings-link" onClick={() => openSettings("relay")}>
           Relay settings…
         </button>
       )}

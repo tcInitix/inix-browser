@@ -338,9 +338,7 @@ export function isLibraryUrl(url: string): boolean {
 
 
 export function isSettingsUrl(url: string): boolean {
-
-  return url === "inix://settings";
-
+  return url.split("#")[0]?.split("?")[0] === "inix://settings";
 }
 
 

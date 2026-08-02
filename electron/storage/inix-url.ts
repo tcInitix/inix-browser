@@ -1,9 +1,13 @@
 import { getBookmarkById } from "./bookmarks";
 import { getArchiveLoadUrl } from "./archive-service";
 
+export function isSettingsShellUrl(url: string): boolean {
+  return url.split("#")[0]?.split("?")[0] === "inix://settings";
+}
+
 export function resolveInixUrl(url: string): string | null {
   if (url === "inix://library") return url;
-  if (url === "inix://settings") return url;
+  if (isSettingsShellUrl(url)) return url.split("#")[0];
   if (!url.startsWith("inix://archive/")) return null;
   const idStr = url.replace("inix://archive/", "").split("/")[0];
   const id = parseInt(idStr, 10);

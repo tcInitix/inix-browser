@@ -82,9 +82,9 @@ export function listCredentials(): StoredCredential[] {
 
     out.push({
       id: row.id,
-      origin: row.origin,
-      username: row.username_hint,
-      title: row.title,
+      origin: row.origin || "",
+      username: "",
+      title: "",
       created_at: row.created_at,
       updated_at: row.updated_at,
     });

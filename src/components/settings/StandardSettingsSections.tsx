@@ -299,6 +299,12 @@ export function PrivacySecuritySettingsSection({ state, patch }: SectionProps) {
         onChange={(v) => patch({ trackerBlockingEnabled: v })}
         label="Block known trackers and ad scripts"
       />
+      <p className="settings-note">
+        Blocks network requests to known tracker and ad domains (Google Analytics, DoubleClick,
+        common ad networks, etc.). It does not remove ads baked into a page by the site itself —
+        those fake “Recommended extensions” popups are usually site ads, not Inix prompts. Never
+        click Continue on those.
+      </p>
       <Switch
         className="settings-toggle"
         checked={state.httpsOnlyMode}

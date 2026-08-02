@@ -76,7 +76,12 @@ export function StatusBar({
         )}
 
         {trackersOn && (
-          <span className="status-chip status-chip-shield">Trackers blocked</span>
+          <span
+            className="status-chip status-chip-shield"
+            title="Blocking known third-party trackers and ad scripts. On-page ads from the site itself may still appear."
+          >
+            Trackers blocked
+          </span>
         )}
 
         {settings?.https_only_mode && (
