@@ -125,22 +125,37 @@ function runShell(command) {
 }
 
 /** Release rebuild fails if a running Inix build holds locks on release/win-unpacked. */
-function closeRunningAppForBuild() {
-  if (process.platform !== "win32") return;
+function prepareReleaseBuild() {
+  if (process.platform === "win32") {
+    for (const image of ["Inix.exe", "electron.exe"]) {
+      try {
+        execFileSync("taskkill", ["/IM", image, "/F", "/T"], { stdio: "pipe" });
+        console.log(`Closed ${image} before build.`);
+      } catch {
+        // not running
+      }
+    }
 
-  try {
-    execFileSync("taskkill", ["/IM", "Inix.exe", "/F", "/T"], { stdio: "pipe" });
-    console.log("Closed running Inix processes before build.");
-  } catch {
-    // No Inix.exe running — expected on most builds.
+    try {
+      execSync("ping -n 2 127.0.0.1 > nul", { stdio: "ignore", shell: true });
+    } catch {
+      // ignore
+    }
   }
 
-  // Give Windows a moment to release file handles on app.asar.
-  try {
-    execSync("ping -n 2 127.0.0.1 > nul", { stdio: "ignore", shell: true });
-  } catch {
-    // ignore
-  }
+  // Cursor/Defender often lock release/win-unpacked/app.asar in this workspace.
+  // Build into a fresh output dir so electron-builder never has to delete the stale tree.
+  const buildOutput = path.join(ROOT, "release-build");
+  fs.mkdirSync(buildOutput, { recursive: true });
+  return buildOutput;
+}
+
+function buildShellCommand(buildOutput) {
+  const outputArg = JSON.stringify(buildOutput);
+  return (
+    "npm run installer:assets && npx tsc && npx vite build && " +
+    `npx electron-builder --publish always --config.directories.output=${outputArg}`
+  );
 }
 
 function gitOk(...args) {
@@ -311,8 +326,9 @@ async function main() {
   ensureGhToken();
 
   console.log("Step 4/5 — Build & publish to GitHub Releases…");
-  closeRunningAppForBuild();
-  runShell("npm run installer:assets && npx tsc && npx vite build && npx electron-builder --publish always");
+  const buildOutput = prepareReleaseBuild();
+  console.log(`Building into ${path.relative(ROOT, buildOutput)} (avoids locked release/win-unpacked)`);
+  runShell(buildShellCommand(buildOutput));
 
   console.log("Step 5/5 — Attach release notes on GitHub…");
   await publishNotesToGithub(nextVersion);
