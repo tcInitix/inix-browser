@@ -1,8 +1,12 @@
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { InixLogo } from "./InixLogo";
 import { Switch } from "./Switch";
+import { ProfileAvatar, PROFILE_COLORS, readAvatarDataUrl } from "./ProfileAvatar";
 
 export interface OnboardingResult {
+  profileName: string;
+  profileColor: string;
+  profileAvatar: string | null;
   historyMode: "standard" | "transient";
   bookmarkBar: boolean;
   homepageUrl: string;
@@ -14,11 +18,16 @@ interface OnboardingFlowProps {
   onComplete: (result: OnboardingResult) => void;
 }
 
-const STEPS = ["welcome", "privacy", "customize", "vault", "done"] as const;
+const STEPS = ["welcome", "profile", "privacy", "customize", "vault", "done"] as const;
 type Step = (typeof STEPS)[number];
 
 export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const [step, setStep] = useState<Step>("welcome");
+  const [profileName, setProfileName] = useState("");
+  const [profileColor, setProfileColor] = useState<string>(PROFILE_COLORS[0]);
+  const [profileAvatar, setProfileAvatar] = useState<string | null>(null);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
   const [historyMode, setHistoryMode] = useState<"standard" | "transient">("standard");
   const [bookmarkBar, setBookmarkBar] = useState(false);
   const [homepageUrl, setHomepageUrl] = useState("inix://newtab");
@@ -27,6 +36,7 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const [vaultConfirm, setVaultConfirm] = useState("");
 
   const stepIndex = STEPS.indexOf(step);
+  const displayName = profileName.trim() || "You";
 
   const goNext = () => {
     const i = STEPS.indexOf(step);
@@ -40,12 +50,36 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
 
   const finish = (skipVault = false) => {
     onComplete({
+      profileName: profileName.trim() || "Default",
+      profileColor,
+      profileAvatar,
       historyMode,
       bookmarkBar,
       homepageUrl: homepageUrl.trim() || "inix://newtab",
       newTabUseHomepage,
       vaultPassword: skipVault ? "" : vaultPassword,
     });
+  };
+
+  const handleProfileNext = (e: FormEvent) => {
+    e.preventDefault();
+    goNext();
+  };
+
+  const handleAvatarChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setAvatarError("Please choose an image file");
+      return;
+    }
+    try {
+      setAvatarError(null);
+      setProfileAvatar(await readAvatarDataUrl(file));
+    } catch (err) {
+      setAvatarError(err instanceof Error ? err.message : "Could not load image");
+    }
   };
 
   const handleVaultNext = (e: FormEvent) => {
@@ -92,6 +126,92 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                 Get started
               </button>
             </div>
+          </div>
+        )}
+
+        {step === "profile" && (
+          <div className="onboarding-step">
+            <h2>Set up your profile</h2>
+            <p className="onboarding-lead">
+              Choose a name and look for this browser profile — like Chrome, but everything stays local.
+            </p>
+
+            <form className="onboarding-profile-form" onSubmit={handleProfileNext}>
+              <div className="onboarding-profile-preview">
+                <button
+                  type="button"
+                  className="onboarding-profile-avatar-btn"
+                  onClick={() => avatarInputRef.current?.click()}
+                  title="Upload profile photo"
+                >
+                  <ProfileAvatar
+                    name={displayName}
+                    color={profileColor}
+                    avatar={profileAvatar}
+                    size={88}
+                    className="onboarding-profile-avatar"
+                  />
+                  <span className="onboarding-profile-avatar-hint">Add photo</span>
+                </button>
+                <input
+                  ref={avatarInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="sr-only"
+                  onChange={(e) => void handleAvatarChange(e)}
+                />
+                {profileAvatar && (
+                  <button
+                    type="button"
+                    className="onboarding-profile-remove-photo"
+                    onClick={() => setProfileAvatar(null)}
+                  >
+                    Remove photo
+                  </button>
+                )}
+              </div>
+
+              {avatarError && <p className="settings-callout settings-callout-error">{avatarError}</p>}
+
+              <label className="onboarding-field">
+                <span>Profile name</span>
+                <input
+                  type="text"
+                  value={profileName}
+                  onChange={(e) => setProfileName(e.target.value)}
+                  placeholder="Your name"
+                  autoFocus
+                  maxLength={32}
+                />
+              </label>
+
+              <fieldset className="onboarding-profile-colors">
+                <legend>Accent color</legend>
+                <div className="onboarding-profile-swatches" role="list">
+                  {PROFILE_COLORS.map((color) => (
+                    <button
+                      key={color}
+                      type="button"
+                      role="listitem"
+                      className={`onboarding-profile-swatch${profileColor === color ? " selected" : ""}`}
+                      style={{ background: color }}
+                      aria-label={`Color ${color}`}
+                      aria-pressed={profileColor === color}
+                      onClick={() => setProfileColor(color)}
+                    />
+                  ))}
+                </div>
+              </fieldset>
+
+              <div className="onboarding-actions">
+                <button type="button" className="onboarding-secondary" onClick={goBack}>
+                  Back
+                </button>
+                <button type="submit" className="onboarding-primary">
+                  Continue
+                </button>
+              </div>
+            </form>
           </div>
         )}
 
@@ -229,7 +349,14 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
 
         {step === "done" && (
           <div className="onboarding-step onboarding-step-done">
-            <h2>You&apos;re all set</h2>
+            <ProfileAvatar
+              name={displayName}
+              color={profileColor}
+              avatar={profileAvatar}
+              size={64}
+              className="onboarding-done-avatar"
+            />
+            <h2>Welcome{displayName !== "You" ? `, ${displayName}` : ""}</h2>
             <p className="onboarding-lead">
               Inix is ready. Press <kbd>Ctrl</kbd>+<kbd>L</kbd> to focus the address bar, or open the
               Inix AI sidebar from the toolbar when you need help summarizing a page.

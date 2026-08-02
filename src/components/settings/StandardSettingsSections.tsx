@@ -9,7 +9,6 @@ import type {
 } from "../../inix.d";
 import { applyFontScale, applyThemeMode } from "../../utils/apply-appearance";
 import {
-  DEFAULT_QUICK_LINKS,
   parseQuickLinks,
   serializeQuickLinks,
   type QuickLink,
@@ -67,7 +66,7 @@ export function defaultStandardSettings(): StandardSettingsState {
     openLinksInNewTab: false,
     newTabShowSearch: true,
     newTabShowQuickLinks: true,
-    quickLinks: DEFAULT_QUICK_LINKS,
+    quickLinks: [] as QuickLink[],
   };
 }
 

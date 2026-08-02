@@ -21,6 +21,7 @@ import {
   listProfiles,
   createProfile,
   renameProfile,
+  updateProfile,
   deleteProfileWithData,
   getProfile,
 } from "../profiles/manager";
@@ -120,6 +121,11 @@ export function registerAutofillHandlers(
   );
   ipcMain.handle("profiles:rename", (_e, id: string, name: string) =>
     renameProfile(id, name)
+  );
+  ipcMain.handle(
+    "profiles:update",
+    (_e, id: string, patch: { name?: string; color?: string; avatar?: string | null }) =>
+      updateProfile(id, patch)
   );
   ipcMain.handle("profiles:delete", async (_e, id: string) => deleteProfileWithData(id));
   ipcMain.handle("profiles:open-window", (_e, profileId: string) => {

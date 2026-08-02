@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent, type Keyboar
 import { InixLogo } from "./InixLogo";
 import { QuickLinkIcon } from "./QuickLinkIcon";
 import {
-  DEFAULT_QUICK_LINKS,
   normalizeQuickLinkUrl,
   parseQuickLinks,
   quickLinkIconMode,
@@ -27,7 +26,7 @@ function greeting(): string {
 
 export function NewTabPage({ onNavigate, onOpenSearch, onOpenLibrary }: NewTabPageProps) {
   const [query, setQuery] = useState("");
-  const [links, setLinks] = useState<QuickLink[]>(DEFAULT_QUICK_LINKS);
+  const [links, setLinks] = useState<QuickLink[]>([]);
   const [editing, setEditing] = useState(false);
   const [showSearch, setShowSearch] = useState(true);
   const [showQuickLinks, setShowQuickLinks] = useState(true);
@@ -46,7 +45,6 @@ export function NewTabPage({ onNavigate, onOpenSearch, onOpenLibrary }: NewTabPa
 
   const persistLinks = useCallback(async (next: QuickLink[]) => {
     const cleaned = serializeQuickLinks(next);
-    if (!cleaned.length) return;
     setLinks(cleaned);
     await window.inix?.settings.set("new_tab_quick_links", JSON.stringify(cleaned));
   }, []);
@@ -80,7 +78,6 @@ export function NewTabPage({ onNavigate, onOpenSearch, onOpenLibrary }: NewTabPa
   };
 
   const removeLink = (index: number) => {
-    if (links.length <= 1) return;
     void persistLinks(links.filter((_, i) => i !== index));
   };
 
@@ -225,7 +222,6 @@ export function NewTabPage({ onNavigate, onOpenSearch, onOpenLibrary }: NewTabPa
                       type="button"
                       className="quick-link-remove"
                       title="Remove link"
-                      disabled={links.length <= 1}
                       onClick={() => removeLink(index)}
                     >
                       ✕
@@ -284,7 +280,7 @@ export function NewTabPage({ onNavigate, onOpenSearch, onOpenLibrary }: NewTabPa
                 Click an icon to switch between site favicon and letter. Changes save automatically.
               </p>
             </div>
-          ) : (
+          ) : links.length > 0 ? (
             <div className="quick-links">
               {links.map((link) => (
                 <button
@@ -298,6 +294,8 @@ export function NewTabPage({ onNavigate, onOpenSearch, onOpenLibrary }: NewTabPa
                 </button>
               ))}
             </div>
+          ) : (
+            <p className="new-tab-shortcuts-empty">No shortcuts yet — click Edit to add your favorites.</p>
           )}
         </section>
         )}

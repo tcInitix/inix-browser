@@ -409,7 +409,10 @@ contextBridge.exposeInMainWorld("inix", {
   },
   profiles: {
     list: () => ipcRenderer.invoke("profiles:list"),
+    get: (id: string) => ipcRenderer.invoke("profiles:get", id),
     create: (name: string, color?: string) => ipcRenderer.invoke("profiles:create", name, color),
+    update: (id: string, patch: { name?: string; color?: string; avatar?: string | null }) =>
+      ipcRenderer.invoke("profiles:update", id, patch),
     rename: (id: string, name: string) => ipcRenderer.invoke("profiles:rename", id, name),
     delete: (id: string) => ipcRenderer.invoke("profiles:delete", id),
     openWindow: (id: string) => ipcRenderer.invoke("profiles:open-window", id),

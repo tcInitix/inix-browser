@@ -4,12 +4,13 @@ import { clearHistory } from "./history";
 import { clearAllBookmarks } from "./bookmarks";
 import { destroyVault } from "./vault";
 import { runExec, saveDatabase } from "./db";
-import { setSetting } from "./settings";
+import { setSetting, resetAllSettingsToDefaults } from "./settings";
 import {
   DEFAULT_PROFILE_ID,
   deleteProfile,
   getProfilePartition,
   listProfiles,
+  resetDefaultProfile,
 } from "../profiles/manager";
 import { sessionManager } from "../session/session-manager";
 
@@ -50,6 +51,8 @@ export async function factoryResetApp(): Promise<void> {
   await clearBrowsingData({ cookies: true, cache: true, storage: true });
 
   sessionManager.clearSnapshot();
+  resetAllSettingsToDefaults();
+  resetDefaultProfile();
   setSetting("onboarding_completed", "false");
   saveDatabase();
 }

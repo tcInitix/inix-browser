@@ -259,6 +259,11 @@ export default function App() {
       await s.set("new_tab_use_homepage", result.newTabUseHomepage ? "true" : "false");
       await s.set("onboarding_completed", "true");
     }
+    await window.inix?.profiles.update("default", {
+      name: result.profileName,
+      color: result.profileColor,
+      avatar: result.profileAvatar,
+    });
     if (result.vaultPassword) {
       const vault = await window.inix?.vault.setup(result.vaultPassword);
       if (!vault?.ok) showToast(vault?.error ?? "Vault setup failed");

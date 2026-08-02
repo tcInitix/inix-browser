@@ -5266,6 +5266,130 @@ h3,
   font-size: 12px;
 }
 
+.onboarding-profile-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.onboarding-profile-preview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.onboarding-profile-avatar-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--text-muted);
+}
+
+.onboarding-profile-avatar-btn:hover .onboarding-profile-avatar-hint {
+  color: var(--accent-bright);
+}
+
+.onboarding-profile-avatar-hint {
+  font-size: 12px;
+  transition: color 0.15s ease;
+}
+
+.onboarding-profile-remove-photo {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.onboarding-profile-remove-photo:hover {
+  color: var(--text-primary);
+}
+
+.onboarding-profile-colors {
+  border: none;
+  margin: 0;
+  padding: 0;
+}
+
+.onboarding-profile-colors legend {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+
+.onboarding-profile-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.onboarding-profile-swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.onboarding-profile-swatch:hover {
+  transform: scale(1.08);
+}
+
+.onboarding-profile-swatch.selected {
+  box-shadow: 0 0 0 2px var(--bg-panel), 0 0 0 4px var(--accent-bright);
+}
+
+.onboarding-done-avatar {
+  margin: 0 auto 12px;
+}
+
+.profile-avatar {
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  overflow: hidden;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.profile-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.profile-list-avatar {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  object-fit: cover;
+  vertical-align: middle;
+}
+
+.new-tab-shortcuts-empty {
+  margin: 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.settings-callout-error {
+  color: #f87171;
+}
+
 /* Panic switch */
 .title-panic-btn {
   width: var(--title-action-size);

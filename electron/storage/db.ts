@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { app } from "electron";
 import { createRequire } from "node:module";
+import { DEFAULT_SETTINGS } from "./settings-defaults";
 
 const require = createRequire(import.meta.url);
 
@@ -100,54 +101,7 @@ function runMigrations(database: Database): void {
     CREATE INDEX IF NOT EXISTS idx_embeddings_source ON embeddings(source_type, source_id);
   `);
 
-  const defaults: Record<string, string> = {
-    ai_provider: "local",
-    engine_host: "http://127.0.0.1:11434",
-    chat_model: "qwen2.5:7b",
-    embed_model: "nomic-embed-text",
-    api_base_url: "https://api.openai.com/v1",
-    api_key: "",
-    api_model: "gpt-4o-mini",
-    capture_enabled: "true",
-    archive_enabled: "true",
-    tab_freeze_enabled: "true",
-    tab_freeze_minutes: "30",
-    history_mode: "standard",
-    transient_purge_on_close: "true",
-    transient_retention_hours: "24",
-    homepage_url: "inix://newtab",
-    new_tab_use_homepage: "false",
-    restore_tabs_on_launch: "true",
-    private_mode_shortcut: "window",
-    bookmark_bar_enabled: "false",
-    panic_configured: "false",
-    panic_urls: "[]",
-    new_tab_quick_links:
-      '[{"label":"DuckDuckGo","url":"https://duckduckgo.com"},{"label":"GitHub","url":"https://github.com"},{"label":"Reddit","url":"https://reddit.com"},{"label":"Hacker News","url":"https://news.ycombinator.com"}]',
-    startup_mode: "restore",
-    startup_urls: "[]",
-    default_search_engine: "duckduckgo",
-    custom_search_url: "",
-    theme_mode: "dark",
-    default_zoom_level: "0",
-    ui_font_scale: "medium",
-    tracker_blocking_enabled: "true",
-    https_only_mode: "false",
-    block_third_party_cookies: "false",
-    clear_cookies_on_exit: "false",
-    clear_cache_on_exit: "false",
-    offer_save_passwords: "true",
-    autofill_enabled: "true",
-    default_notifications: "ask",
-    default_geolocation: "ask",
-    default_media: "ask",
-    download_path: "",
-    prompt_for_download: "false",
-    close_window_with_last_tab: "false",
-    open_links_in_new_tab: "false",
-    new_tab_show_search: "true",
-    new_tab_show_quick_links: "true",
-  };
+  const defaults = DEFAULT_SETTINGS;
 
   for (const [key, value] of Object.entries(defaults)) {
     database.run("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", [key, value]);
@@ -160,6 +114,7 @@ function runMigrations(database: Database): void {
   migrateBookmarkBar(database);
   migrateBookmarkBarNodes(database);
   migrateOnboarding(database);
+  migrateProfileAvatar(database);
 }
 
 function settingExists(database: Database, key: string): boolean {
@@ -339,6 +294,13 @@ function migrateBookmarkBarNodes(database: Database): void {
       [row[0] as number, index, Date.now()]
     );
   });
+  saveDatabase();
+}
+
+function migrateProfileAvatar(database: Database): void {
+  if (!columnExists(database, "browser_profiles", "avatar")) {
+    database.run("ALTER TABLE browser_profiles ADD COLUMN avatar TEXT");
+  }
   saveDatabase();
 }
 

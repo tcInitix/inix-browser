@@ -1,4 +1,5 @@
 import { runQuery, runExec, saveDatabase } from "./db";
+import { DEFAULT_SETTINGS } from "./settings-defaults";
 
 export type SearchEngineId =
   | "duckduckgo"
@@ -121,16 +122,10 @@ function parseJsonStringArray(raw: string | undefined): string[] {
 }
 
 function parseQuickLinksSetting(raw: string): QuickLinkSetting[] {
-  const fallback = [
-    { label: "DuckDuckGo", url: "https://duckduckgo.com" },
-    { label: "GitHub", url: "https://github.com" },
-    { label: "Reddit", url: "https://reddit.com" },
-    { label: "Hacker News", url: "https://news.ycombinator.com" },
-  ];
-  if (!raw.trim()) return fallback;
+  if (!raw.trim()) return [];
   try {
     const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return fallback;
+    if (!Array.isArray(parsed)) return [];
     const links = parsed
       .map((item) => {
         if (!item || typeof item !== "object") return null;
@@ -143,9 +138,9 @@ function parseQuickLinksSetting(raw: string): QuickLinkSetting[] {
         return link;
       })
       .filter((item): item is QuickLinkSetting => item != null);
-    return links.length ? links : fallback;
+    return links;
   } catch {
-    return fallback;
+    return [];
   }
 }
 
@@ -252,4 +247,11 @@ export function syncStartupSettings(mode: StartupMode): void {
 
 export function getFormattedSettings(): Settings {
   return getSettings();
+}
+
+/** Restore every known setting to factory defaults (used by factory reset). */
+export function resetAllSettingsToDefaults(): void {
+  for (const [key, value] of Object.entries(DEFAULT_SETTINGS)) {
+    setSetting(key, value);
+  }
 }

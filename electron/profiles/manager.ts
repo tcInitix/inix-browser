@@ -12,6 +12,7 @@ export interface BrowserProfile {
   id: string;
   name: string;
   color: string;
+  avatar: string | null;
   created_at: number;
 }
 
@@ -44,35 +45,69 @@ export function setWindowProfileId(win: BrowserWindow, profileId: string): void 
 
 export function listProfiles(): BrowserProfile[] {
   return runQuery<BrowserProfile>(
-    "SELECT id, name, color, created_at FROM browser_profiles ORDER BY created_at ASC"
-  );
+    "SELECT id, name, color, avatar, created_at FROM browser_profiles ORDER BY created_at ASC"
+  ).map((row) => ({ ...row, avatar: row.avatar ?? null }));
 }
 
 export function getProfile(id: string): BrowserProfile | null {
   const rows = runQuery<BrowserProfile>(
-    "SELECT id, name, color, created_at FROM browser_profiles WHERE id = ?",
+    "SELECT id, name, color, avatar, created_at FROM browser_profiles WHERE id = ?",
     [id]
   );
-  return rows[0] ?? null;
+  const row = rows[0];
+  if (!row) return null;
+  return { ...row, avatar: row.avatar ?? null };
 }
 
 export function createProfile(name: string, color = "#6366f1"): BrowserProfile {
   const id = crypto.randomUUID();
   const now = Date.now();
   runExec(
-    "INSERT INTO browser_profiles (id, name, color, created_at) VALUES (?, ?, ?, ?)",
+    "INSERT INTO browser_profiles (id, name, color, avatar, created_at) VALUES (?, ?, ?, NULL, ?)",
     [id, name.trim() || "Profile", color, now]
   );
   saveDatabase();
   ensureProfileSession(id);
-  return { id, name: name.trim() || "Profile", color, created_at: now };
+  return { id, name: name.trim() || "Profile", color, avatar: null, created_at: now };
 }
 
 export function renameProfile(id: string, name: string): boolean {
-  if (id === DEFAULT_PROFILE_ID) return false;
-  runExec("UPDATE browser_profiles SET name = ? WHERE id = ?", [name.trim(), id]);
+  runExec("UPDATE browser_profiles SET name = ? WHERE id = ?", [name.trim() || "Profile", id]);
   saveDatabase();
   return true;
+}
+
+export interface ProfileUpdate {
+  name?: string;
+  color?: string;
+  avatar?: string | null;
+}
+
+export function updateProfile(id: string, patch: ProfileUpdate): BrowserProfile | null {
+  const existing = getProfile(id);
+  if (!existing) return null;
+
+  const name = patch.name !== undefined ? patch.name.trim() || "Profile" : existing.name;
+  const color = patch.color ?? existing.color;
+  const avatar = patch.avatar !== undefined ? patch.avatar : existing.avatar;
+
+  runExec("UPDATE browser_profiles SET name = ?, color = ?, avatar = ? WHERE id = ?", [
+    name,
+    color,
+    avatar,
+    id,
+  ]);
+  saveDatabase();
+  return getProfile(id);
+}
+
+export function resetDefaultProfile(): void {
+  runExec("UPDATE browser_profiles SET name = ?, color = ?, avatar = NULL WHERE id = ?", [
+    "Default",
+    "#6366f1",
+    DEFAULT_PROFILE_ID,
+  ]);
+  saveDatabase();
 }
 
 export async function deleteProfileWithData(id: string): Promise<boolean> {

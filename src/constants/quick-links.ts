@@ -16,10 +16,10 @@ export const DEFAULT_QUICK_LINKS: QuickLink[] = [
 export const DEFAULT_QUICK_LINKS_JSON = JSON.stringify(DEFAULT_QUICK_LINKS);
 
 export function parseQuickLinks(raw: string | undefined | null): QuickLink[] {
-  if (!raw?.trim()) return DEFAULT_QUICK_LINKS;
+  if (!raw?.trim()) return [];
   try {
     const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return DEFAULT_QUICK_LINKS;
+    if (!Array.isArray(parsed)) return [];
     const links = parsed
       .map((item) => {
         if (!item || typeof item !== "object") return null;
@@ -35,9 +35,9 @@ export function parseQuickLinks(raw: string | undefined | null): QuickLink[] {
         return link;
       })
       .filter((item): item is QuickLink => item != null);
-    return links.length ? links : DEFAULT_QUICK_LINKS;
+    return links;
   } catch {
-    return DEFAULT_QUICK_LINKS;
+    return [];
   }
 }
 

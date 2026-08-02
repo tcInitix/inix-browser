@@ -228,6 +228,7 @@ export interface BrowserProfile {
   id: string;
   name: string;
   color: string;
+  avatar: string | null;
   created_at: number;
 }
 
@@ -465,7 +466,12 @@ export interface InixAPI {
   };
   profiles: {
     list: () => Promise<BrowserProfile[]>;
+    get: (id: string) => Promise<BrowserProfile | null>;
     create: (name: string, color?: string) => Promise<BrowserProfile>;
+    update: (
+      id: string,
+      patch: { name?: string; color?: string; avatar?: string | null }
+    ) => Promise<BrowserProfile | null>;
     rename: (id: string, name: string) => Promise<boolean>;
     delete: (id: string) => Promise<boolean>;
     openWindow: (id: string) => Promise<boolean>;

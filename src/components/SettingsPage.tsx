@@ -67,6 +67,7 @@ interface BrowserProfile {
   id: string;
   name: string;
   color: string;
+  avatar?: string | null;
 }
 
 interface ChromeProfileOption {
@@ -1475,10 +1476,14 @@ export function SettingsPage({
               <ul className="alias-list">
                 {browserProfiles.map((p) => (
                   <li key={p.id}>
-                    <span
-                      className="profile-color-dot"
-                      style={{ background: p.color, width: 10, height: 10, borderRadius: "50%", display: "inline-block" }}
-                    />
+                    {p.avatar ? (
+                      <img src={p.avatar} alt="" className="profile-list-avatar" />
+                    ) : (
+                      <span
+                        className="profile-color-dot"
+                        style={{ background: p.color, width: 10, height: 10, borderRadius: "50%", display: "inline-block" }}
+                      />
+                    )}
                     <span>{p.name}</span>
                     {p.id !== "default" ? (
                       <>
