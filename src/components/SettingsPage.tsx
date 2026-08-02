@@ -17,6 +17,7 @@ import {
   DownloadsSettingsSection,
   GeneralSettingsSection,
   NewTabSettingsSection,
+  PasswordsAutofillTogglesSection,
   PrivacySecuritySettingsSection,
   defaultStandardSettings,
   loadStandardSettingsFromFormatted,
@@ -37,18 +38,54 @@ const API_PRESETS = [
 type SettingsSection =
   | "general"
   | "appearance"
-  | "privacy"
-  | "downloads"
-  | "ai"
-  | "tabs"
-  | "history"
   | "newtab"
-  | "vault"
-  | "autofill"
-  | "profiles"
+  | "privacy"
+  | "history"
+  | "passwords"
+  | "downloads"
+  | "tabs"
   | "library"
-  | "routes"
+  | "profiles"
+  | "ai"
   | "data";
+
+const NAV_GROUPS: {
+  label: string;
+  items: { id: SettingsSection; label: string; icon: string }[];
+}[] = [
+  {
+    label: "Browse",
+    items: [
+      { id: "general", label: "General", icon: "⚙" },
+      { id: "appearance", label: "Appearance", icon: "◐" },
+      { id: "newtab", label: "New Tab & Home", icon: "⌂" },
+    ],
+  },
+  {
+    label: "Privacy & account",
+    items: [
+      { id: "privacy", label: "Privacy & Security", icon: "◈" },
+      { id: "history", label: "History", icon: "◷" },
+      { id: "passwords", label: "Passwords & Autofill", icon: "⛨" },
+      { id: "profiles", label: "Profiles", icon: "◉" },
+    ],
+  },
+  {
+    label: "Features",
+    items: [
+      { id: "tabs", label: "Tabs & Memory", icon: "▣" },
+      { id: "library", label: "Library", icon: "★" },
+      { id: "downloads", label: "Downloads", icon: "↓" },
+      { id: "ai", label: "Inix AI", icon: "✦" },
+    ],
+  },
+  {
+    label: "Advanced",
+    items: [{ id: "data", label: "Data & Storage", icon: "⌫" }],
+  },
+];
+
+const NAV = NAV_GROUPS.flatMap((group) => group.items);
 
 interface StoredCredential {
   id: number;
@@ -134,23 +171,6 @@ interface SettingsPageProps {
   onSettingsApplied?: (settings: InixSettings) => void;
   onFactoryReset?: () => void;
 }
-
-const NAV: { id: SettingsSection; label: string; icon: string }[] = [
-  { id: "general", label: "General", icon: "⚙" },
-  { id: "appearance", label: "Appearance", icon: "◐" },
-  { id: "privacy", label: "Privacy & Security", icon: "◈" },
-  { id: "downloads", label: "Downloads", icon: "↓" },
-  { id: "tabs", label: "Tabs & Memory", icon: "▣" },
-  { id: "history", label: "History", icon: "◷" },
-  { id: "newtab", label: "New Tab", icon: "⌂" },
-  { id: "vault", label: "Vault", icon: "⛨" },
-  { id: "autofill", label: "Autofill", icon: "▤" },
-  { id: "profiles", label: "Profiles", icon: "◉" },
-  { id: "library", label: "Library", icon: "★" },
-  { id: "routes", label: "Quick Routes", icon: "↗" },
-  { id: "ai", label: "Inix AI", icon: "✦" },
-  { id: "data", label: "Data & Import", icon: "⌂" },
-];
 
 export function SettingsPage({
   onNavigate,
@@ -366,13 +386,15 @@ export function SettingsPage({
 
   useEffect(() => {
     if (section === "privacy") void refreshPrivacy();
-    if (section === "vault") void refreshVaultData();
-    if (section === "autofill") void refreshAutofill();
+    if (section === "passwords") {
+      void refreshVaultData();
+      void refreshAutofill();
+    }
     if (section === "profiles") void refreshBrowserProfiles();
   }, [section, refreshPrivacy, refreshVaultData, refreshAutofill, refreshBrowserProfiles]);
 
   useEffect(() => {
-    if (section !== "data" && section !== "vault" && section !== "library") return;
+    if (section !== "passwords") return;
     void window.inix?.import.chromeProfiles().then((res) => {
       if (!res) return;
       setChromeProfiles(res.profiles);
@@ -496,13 +518,6 @@ export function SettingsPage({
         Manager → Export). Unlock the vault first.
       </p>
     </div>
-  );
-
-  const chromeImportControls = (
-    <>
-      {chromePasswordImportBlock}
-      {importMessage && <p className="settings-callout">{importMessage}</p>}
-    </>
   );
 
   const installed = engineStatus?.models ?? [];
@@ -647,16 +662,21 @@ export function SettingsPage({
         </button>
         <h1 className="settings-sidebar-title">Settings</h1>
         <nav className="settings-nav" aria-label="Settings sections">
-          {NAV.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              className={`settings-nav-item${section === item.id ? " active" : ""}`}
-              onClick={() => setSection(item.id)}
-            >
-              <span className="settings-nav-icon">{item.icon}</span>
-              {item.label}
-            </button>
+          {NAV_GROUPS.map((group) => (
+            <div key={group.label} className="settings-nav-group">
+              <p className="settings-nav-group-label">{group.label}</p>
+              {group.items.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={`settings-nav-item${section === item.id ? " active" : ""}`}
+                  onClick={() => setSection(item.id)}
+                >
+                  <span className="settings-nav-icon">{item.icon}</span>
+                  {item.label}
+                </button>
+              ))}
+            </div>
           ))}
         </nav>
       </aside>
@@ -678,6 +698,76 @@ export function SettingsPage({
               <section className="settings-card">
                 <div className="settings-card-head">
                   <div>
+                    <h2>Quick routes</h2>
+                    <p>Type an alias in the address bar to jump directly — e.g. gh, localai</p>
+                  </div>
+                </div>
+                <div className="alias-add-row">
+                  <input value={newAlias} onChange={(e) => setNewAlias(e.target.value)} placeholder="Alias" />
+                  <input value={newAliasUrl} onChange={(e) => setNewAliasUrl(e.target.value)} placeholder="Target URL" />
+                  <input
+                    value={newAliasTitle}
+                    onChange={(e) => setNewAliasTitle(e.target.value)}
+                    placeholder="Label (optional)"
+                  />
+                  <button type="button" onClick={() => void addAlias()}>
+                    Add
+                  </button>
+                </div>
+                <ul className="alias-list">
+                  {aliases.map((a) => (
+                    <li key={a.alias}>
+                      <code>{a.alias}</code>
+                      <span>{a.title || a.url}</span>
+                      <button type="button" className="alias-remove" onClick={() => void removeAliasRow(a.alias)}>
+                        ✕
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+              <section className="settings-card">
+                <div className="settings-card-head">
+                  <div>
+                    <h2>About Inix</h2>
+                    <p>Version info and update checks.</p>
+                  </div>
+                </div>
+                <p className="settings-note">
+                  Current version: <strong>{appVersion || "…"}</strong>
+                </p>
+                <div className="settings-action-row">
+                  <button
+                    type="button"
+                    className="settings-secondary-btn"
+                    disabled={checkingUpdate}
+                    onClick={() => void checkForUpdates()}
+                  >
+                    {checkingUpdate ? "Checking…" : "Check for updates"}
+                  </button>
+                </div>
+                {updateMessage && <p className="settings-callout">{updateMessage}</p>}
+              </section>
+            </>
+          )}
+
+          {section === "appearance" && (
+            <AppearanceSettingsSection state={standard} patch={patchStandard} />
+          )}
+
+          {section === "downloads" && (
+            <DownloadsSettingsSection
+              state={standard}
+              patch={patchStandard}
+              defaultDownloadPath={defaultDownloadPath}
+            />
+          )}
+
+          {section === "newtab" && (
+            <>
+              <section className="settings-card">
+                <div className="settings-card-head">
+                  <div>
                     <h2>Homepage</h2>
                     <p>Where the Home button and Alt+Home shortcut take you.</p>
                   </div>
@@ -696,48 +786,10 @@ export function SettingsPage({
                   onChange={setNewTabUseHomepage}
                   label="Open homepage instead of the Inix new tab page for new tabs"
                 />
-                <div className="settings-divider" />
-                <div className="settings-card-head">
-                  <div>
-                    <h2>Private browsing</h2>
-                    <p>Choose what Ctrl+Shift+N does.</p>
-                  </div>
-                </div>
-                <label className="settings-field">
-                  <span>Ctrl+Shift+N opens</span>
-                  <select
-                    value={privateModeShortcut}
-                    onChange={(e) => setPrivateModeShortcut(e.target.value as "window" | "tab")}
-                  >
-                    <option value="window">New private window (all tabs private)</option>
-                    <option value="tab">New private tab in this window</option>
-                  </select>
-                </label>
               </section>
+              <NewTabSettingsSection state={standard} patch={patchStandard} />
             </>
           )}
-
-          {section === "appearance" && (
-            <AppearanceSettingsSection
-              state={standard}
-              patch={patchStandard}
-              bookmarkBarEnabled={bookmarkBarEnabled}
-              onBookmarkBarChange={(enabled) => {
-                setBookmarkBarEnabled(enabled);
-                onBookmarkBarChange?.(enabled);
-              }}
-            />
-          )}
-
-          {section === "downloads" && (
-            <DownloadsSettingsSection
-              state={standard}
-              patch={patchStandard}
-              defaultDownloadPath={defaultDownloadPath}
-            />
-          )}
-
-          {section === "newtab" && <NewTabSettingsSection state={standard} patch={patchStandard} />}
 
           {section === "ai" && (
             <section className="settings-card">
@@ -1052,31 +1104,6 @@ export function SettingsPage({
               <p className="settings-note">Hibernated tabs keep their URL and scroll position.</p>
 
               <BrowsingSettingsSection state={standard} patch={patchStandard} variant="section" />
-
-              <div className="settings-divider" />
-
-              <div className="settings-card-head">
-                <div>
-                  <h2>Panic switch</h2>
-                  <p>
-                    Instantly swap to safe tabs, then swap back. Button in the title bar or Ctrl+Shift+P.
-                  </p>
-                </div>
-              </div>
-              <label className="settings-field settings-field-stack">
-                <span>Safe URLs (one per line, each opens in its own tab)</span>
-                <textarea
-                  className="panic-settings-textarea"
-                  rows={4}
-                  value={panicUrlsText}
-                  onChange={(e) => setPanicUrlsText(e.target.value)}
-                  placeholder={"google.com\nhttps://github.com"}
-                />
-              </label>
-              <p className="settings-note">
-                Your real tabs are preserved in memory until you switch back. Session restore keeps your real tabs,
-                not the safe ones.
-              </p>
             </section>
           )}
 
@@ -1084,6 +1111,49 @@ export function SettingsPage({
             <>
               <RegionRelaySettingsSection />
               <PrivacySecuritySettingsSection state={standard} patch={patchStandard} />
+              <section className="settings-card">
+                <div className="settings-card-head">
+                  <div>
+                    <h2>Private browsing</h2>
+                    <p>Choose what Ctrl+Shift+N does.</p>
+                  </div>
+                </div>
+                <label className="settings-field">
+                  <span>Ctrl+Shift+N opens</span>
+                  <select
+                    value={privateModeShortcut}
+                    onChange={(e) => setPrivateModeShortcut(e.target.value as "window" | "tab")}
+                  >
+                    <option value="window">New private window (all tabs private)</option>
+                    <option value="tab">New private tab in this window</option>
+                  </select>
+                </label>
+
+                <div className="settings-divider" />
+
+                <div className="settings-card-head">
+                  <div>
+                    <h2>Panic switch</h2>
+                    <p>
+                      Instantly swap to safe tabs, then swap back. Button in the title bar or Ctrl+Shift+P.
+                    </p>
+                  </div>
+                </div>
+                <label className="settings-field settings-field-stack">
+                  <span>Safe URLs (one per line, each opens in its own tab)</span>
+                  <textarea
+                    className="panic-settings-textarea"
+                    rows={4}
+                    value={panicUrlsText}
+                    onChange={(e) => setPanicUrlsText(e.target.value)}
+                    placeholder={"google.com\nhttps://github.com"}
+                  />
+                </label>
+                <p className="settings-note">
+                  Your real tabs are preserved in memory until you switch back. Session restore keeps your real
+                  tabs, not the safe ones.
+                </p>
+              </section>
               <section className="settings-card">
               <div className="settings-card-head">
                 <div>
@@ -1209,53 +1279,59 @@ export function SettingsPage({
             </section>
           )}
 
-          {section === "vault" && (
-            <section className="settings-card">
-              <div className="settings-card-head">
-                <div>
-                  <h2>History vault</h2>
-                  <p>Encrypt sensitive history behind a master password.</p>
+          {section === "passwords" && (
+            <>
+              <PasswordsAutofillTogglesSection state={standard} patch={patchStandard} />
+              <section className="settings-card">
+                <div className="settings-card-head">
+                  <div>
+                    <h2>Vault</h2>
+                    <p>Master password for saved logins and encrypted checkout profiles.</p>
+                  </div>
                 </div>
-              </div>
-              {!vaultConfigured ? (
-                <>
-                  <p className="settings-note">
-                    There is no recovery if you forget your vault password.
-                  </p>
-                  <button type="button" className="settings-primary-btn" onClick={() => setVaultModalOpen(true)}>
-                    Set up vault password
-                  </button>
-                </>
-              ) : (
-                <>
-                  <p className="settings-callout settings-callout-ok">Vault is configured on this device.</p>
-                  {!vaultChangeOpen ? (
-                    <button type="button" className="settings-secondary-btn" onClick={() => setVaultChangeOpen(true)}>
-                      Change vault password
+                {!vaultConfigured ? (
+                  <>
+                    <p className="settings-note">
+                      There is no recovery if you forget your vault password.
+                    </p>
+                    <button type="button" className="settings-primary-btn" onClick={() => setVaultModalOpen(true)}>
+                      Set up vault password
                     </button>
-                  ) : (
-                    <div className="vault-change-form">
-                      <label className="settings-field">
-                        <span>Current password</span>
-                        <input type="password" value={oldVaultPw} onChange={(e) => setOldVaultPw(e.target.value)} />
-                      </label>
-                      <label className="settings-field">
-                        <span>New password</span>
-                        <input type="password" value={newVaultPw} onChange={(e) => setNewVaultPw(e.target.value)} />
-                      </label>
-                      <button type="button" className="settings-primary-btn" onClick={() => void changeVaultPassword()}>
-                        Update password
+                  </>
+                ) : (
+                  <>
+                    <p className="settings-callout settings-callout-ok">Vault is configured on this device.</p>
+                    {!vaultChangeOpen ? (
+                      <button type="button" className="settings-secondary-btn" onClick={() => setVaultChangeOpen(true)}>
+                        Change vault password
                       </button>
-                    </div>
-                  )}
-                </>
-              )}
+                    ) : (
+                      <div className="vault-change-form">
+                        <label className="settings-field">
+                          <span>Current password</span>
+                          <input type="password" value={oldVaultPw} onChange={(e) => setOldVaultPw(e.target.value)} />
+                        </label>
+                        <label className="settings-field">
+                          <span>New password</span>
+                          <input type="password" value={newVaultPw} onChange={(e) => setNewVaultPw(e.target.value)} />
+                        </label>
+                        <button type="button" className="settings-primary-btn" onClick={() => void changeVaultPassword()}>
+                          Update password
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </section>
+
               {vaultConfigured && (
-                <>
-                  <h3 className="settings-subhead">Saved passwords</h3>
-                  <p className="settings-note">
-                    Unlock the vault to view saved logins. Passwords are encrypted locally.
-                  </p>
+                <section className="settings-card">
+                  <div className="settings-card-head">
+                    <div>
+                      <h2>Saved passwords</h2>
+                      <p>Logins stored in your encrypted vault.</p>
+                    </div>
+                  </div>
                   {chromePasswordImportBlock}
                   {importMessage && <p className="settings-callout">{importMessage}</p>}
                   {savedCredentials.length === 0 ? (
@@ -1285,156 +1361,154 @@ export function SettingsPage({
                       ))}
                     </ul>
                   )}
-                </>
+                </section>
               )}
-            </section>
-          )}
 
-          {section === "autofill" && (
-            <section className="settings-card">
-              <div className="settings-card-head">
-                <div>
-                  <h2>Autofill profiles</h2>
-                  <p>Encrypted name, address, and payment details for checkout forms.</p>
-                </div>
-                <button
-                  type="button"
-                  className="settings-refresh-btn"
-                  onClick={() => void refreshAutofill()}
-                >
-                  Refresh
-                </button>
-              </div>
-              {!vaultConfigured ? (
-                <p className="settings-note">Set up the vault first to store autofill profiles.</p>
-              ) : !vaultUnlocked ? (
-                <>
-                  <p className="settings-note">
-                    Unlock the vault to add or edit encrypted autofill profiles.
-                  </p>
+              <section className="settings-card">
+                <div className="settings-card-head">
+                  <div>
+                    <h2>Checkout autofill profiles</h2>
+                    <p>Encrypted name, address, and payment details for web forms.</p>
+                  </div>
                   <button
                     type="button"
-                    className="settings-primary-btn"
-                    onClick={() => setVaultUnlockOpen(true)}
+                    className="settings-refresh-btn"
+                    onClick={() => void refreshAutofill()}
                   >
-                    Unlock vault
+                    Refresh
                   </button>
-                </>
-              ) : (
-                <>
-                  <div className="settings-inline-toolbar">
-                    <select
-                      className="settings-select"
-                      value={selectedAutofillId ?? ""}
-                      onChange={(e) => {
-                        const id = parseInt(e.target.value, 10);
-                        setSelectedAutofillId(Number.isFinite(id) ? id : null);
-                        void refreshAutofill();
-                      }}
-                    >
-                      {autofillProfiles.length === 0 && (
-                        <option value="" disabled>
-                          No profiles yet
-                        </option>
-                      )}
-                      {autofillProfiles.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.label}
-                          {p.is_default ? " (default)" : ""}
-                        </option>
-                      ))}
-                    </select>
+                </div>
+                {!vaultConfigured ? (
+                  <p className="settings-note">Set up the vault first to store autofill profiles.</p>
+                ) : !vaultUnlocked ? (
+                  <>
+                    <p className="settings-note">
+                      Unlock the vault to add or edit encrypted autofill profiles.
+                    </p>
                     <button
                       type="button"
                       className="settings-primary-btn"
-                      onClick={() => void createAutofillProfile()}
+                      onClick={() => setVaultUnlockOpen(true)}
                     >
-                      Add profile
+                      Unlock vault
                     </button>
-                  </div>
-                  {selectedAutofillId != null && (
-                    <>
-                      <label className="settings-field">
-                        <span>Profile label</span>
-                        <input
-                          value={autofillLabel}
-                          onChange={(e) => setAutofillLabel(e.target.value)}
-                        />
-                      </label>
-                      <div className="settings-form-grid">
-                      {(
-                        [
-                          ["fullName", "Full name"],
-                          ["email", "Email"],
-                          ["phone", "Phone"],
-                          ["addressLine1", "Address line 1"],
-                          ["addressLine2", "Address line 2"],
-                          ["city", "City"],
-                          ["state", "State / region"],
-                          ["postalCode", "Postal code"],
-                          ["country", "Country"],
-                          ["cardName", "Card name"],
-                          ["cardNumber", "Card number"],
-                          ["cardExpiry", "Expiry (MM/YY)"],
-                          ["cardCvc", "CVC"],
-                        ] as const
-                      ).map(([key, label]) => (
-                        <label key={key} className="settings-field">
-                          <span>{label}</span>
+                  </>
+                ) : (
+                  <>
+                    <div className="settings-inline-toolbar">
+                      <select
+                        className="settings-select"
+                        value={selectedAutofillId ?? ""}
+                        onChange={(e) => {
+                          const id = parseInt(e.target.value, 10);
+                          setSelectedAutofillId(Number.isFinite(id) ? id : null);
+                          void refreshAutofill();
+                        }}
+                      >
+                        {autofillProfiles.length === 0 && (
+                          <option value="" disabled>
+                            No profiles yet
+                          </option>
+                        )}
+                        {autofillProfiles.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.label}
+                            {p.is_default ? " (default)" : ""}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        className="settings-primary-btn"
+                        onClick={() => void createAutofillProfile()}
+                      >
+                        Add profile
+                      </button>
+                    </div>
+                    {selectedAutofillId != null && (
+                      <>
+                        <label className="settings-field">
+                          <span>Profile label</span>
                           <input
-                            value={autofillForm[key]}
-                            onChange={(e) =>
-                              setAutofillForm((prev) => ({ ...prev, [key]: e.target.value }))
-                            }
+                            value={autofillLabel}
+                            onChange={(e) => setAutofillLabel(e.target.value)}
                           />
                         </label>
-                      ))}
-                      </div>
-                      <div className="settings-actions-row">
-                        <button
-                          type="button"
-                          className="settings-primary-btn"
-                          onClick={() =>
-                            void window.inix?.autofill
-                              .updateProfile(
-                                selectedAutofillId,
-                                autofillLabel,
-                                autofillForm as unknown as Record<string, string>
-                              )
-                              .then(() => refreshAutofill())
-                          }
-                        >
-                          Save profile
-                        </button>
-                        <button
-                          type="button"
-                          className="settings-secondary-btn"
-                          onClick={() =>
-                            void window.inix?.autofill.setDefault(selectedAutofillId).then(() => refreshAutofill())
-                          }
-                        >
-                          Set as default
-                        </button>
-                        <button
-                          type="button"
-                          className="settings-secondary-btn"
-                          onClick={() =>
-                            void window.inix?.autofill
-                              .removeProfile(selectedAutofillId)
-                              .then(() => {
-                                setSelectedAutofillId(null);
-                                return refreshAutofill();
-                              })
-                          }
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </>
-              )}
-            </section>
+                        <div className="settings-form-grid">
+                        {(
+                          [
+                            ["fullName", "Full name"],
+                            ["email", "Email"],
+                            ["phone", "Phone"],
+                            ["addressLine1", "Address line 1"],
+                            ["addressLine2", "Address line 2"],
+                            ["city", "City"],
+                            ["state", "State / region"],
+                            ["postalCode", "Postal code"],
+                            ["country", "Country"],
+                            ["cardName", "Card name"],
+                            ["cardNumber", "Card number"],
+                            ["cardExpiry", "Expiry (MM/YY)"],
+                            ["cardCvc", "CVC"],
+                          ] as const
+                        ).map(([key, label]) => (
+                          <label key={key} className="settings-field">
+                            <span>{label}</span>
+                            <input
+                              value={autofillForm[key]}
+                              onChange={(e) =>
+                                setAutofillForm((prev) => ({ ...prev, [key]: e.target.value }))
+                              }
+                            />
+                          </label>
+                        ))}
+                        </div>
+                        <div className="settings-actions-row">
+                          <button
+                            type="button"
+                            className="settings-primary-btn"
+                            onClick={() =>
+                              void window.inix?.autofill
+                                .updateProfile(
+                                  selectedAutofillId,
+                                  autofillLabel,
+                                  autofillForm as unknown as Record<string, string>
+                                )
+                                .then(() => refreshAutofill())
+                            }
+                          >
+                            Save profile
+                          </button>
+                          <button
+                            type="button"
+                            className="settings-secondary-btn"
+                            onClick={() =>
+                              void window.inix?.autofill.setDefault(selectedAutofillId).then(() => refreshAutofill())
+                            }
+                          >
+                            Set as default
+                          </button>
+                          <button
+                            type="button"
+                            className="settings-secondary-btn"
+                            onClick={() =>
+                              void window.inix?.autofill
+                                .removeProfile(selectedAutofillId)
+                                .then(() => {
+                                  setSelectedAutofillId(null);
+                                  return refreshAutofill();
+                                })
+                            }
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </>
+                )}
+              </section>
+            </>
           )}
 
           {section === "profiles" && (
@@ -1516,23 +1590,32 @@ export function SettingsPage({
                   </li>
                 ))}
               </ul>
-              <div className="settings-card-head" style={{ marginTop: 24 }}>
-                <div>
-                  <h2>Start over</h2>
-                  <p>
-                    Delete all extra profiles, wipe local data, and run first-time setup again. The default
-                    profile is kept but emptied.
-                  </p>
-                </div>
-              </div>
-              <button type="button" className="settings-danger-btn" onClick={() => void factoryReset()}>
-                Reset Inix &amp; run setup again
-              </button>
             </section>
           )}
 
           {section === "library" && (
             <section className="settings-card">
+              <div className="settings-card-head">
+                <div>
+                  <h2>Bookmarks bar</h2>
+                  <p>Classic bookmarks bar below the toolbar.</p>
+                </div>
+              </div>
+              <Switch
+                className="settings-toggle"
+                checked={bookmarkBarEnabled}
+                onChange={(enabled) => {
+                  setBookmarkBarEnabled(enabled);
+                  onBookmarkBarChange?.(enabled);
+                  void window.inix?.settings.set("bookmark_bar_enabled", enabled ? "true" : "false");
+                  void window.inix?.chrome.setBookmarkBar(enabled);
+                }}
+                label="Show bookmarks bar"
+              />
+              <p className="settings-note">Display pinned bookmarks below the address bar, like Chrome.</p>
+
+              <div className="settings-divider" />
+
               <div className="settings-card-head">
                 <div>
                   <h2>Library & archives</h2>
@@ -1560,133 +1643,96 @@ export function SettingsPage({
             </section>
           )}
 
-          {section === "routes" && (
-            <section className="settings-card">
-              <div className="settings-card-head">
-                <div>
-                  <h2>Quick routes</h2>
-                  <p>Type an alias in the address bar to jump directly — e.g. gh, localai</p>
-                </div>
-              </div>
-              <div className="alias-add-row">
-                <input value={newAlias} onChange={(e) => setNewAlias(e.target.value)} placeholder="Alias" />
-                <input value={newAliasUrl} onChange={(e) => setNewAliasUrl(e.target.value)} placeholder="Target URL" />
-                <input
-                  value={newAliasTitle}
-                  onChange={(e) => setNewAliasTitle(e.target.value)}
-                  placeholder="Label (optional)"
-                />
-                <button type="button" onClick={() => void addAlias()}>
-                  Add
-                </button>
-              </div>
-              <ul className="alias-list">
-                {aliases.map((a) => (
-                  <li key={a.alias}>
-                    <code>{a.alias}</code>
-                    <span>{a.title || a.url}</span>
-                    <button type="button" className="alias-remove" onClick={() => void removeAliasRow(a.alias)}>
-                      ✕
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
-
           {section === "data" && (
-            <section className="settings-card">
-              <div className="settings-card-head">
-                <div>
-                  <h2>Import from Chrome</h2>
-                  <p>Import saved passwords from Chrome. Bookmarks are imported via an exported file — see Library.</p>
+            <>
+              <section className="settings-card">
+                <div className="settings-card-head">
+                  <div>
+                    <h2>Browsing data</h2>
+                    <p>Clear local history, bookmarks, cache, and cookies.</p>
+                  </div>
                 </div>
-              </div>
-              {chromeImportControls}
-              <div className="settings-card-head" style={{ marginTop: 24 }}>
-                <div>
-                  <h2>Updates</h2>
-                  <p>Installed builds check GitHub Releases for new versions automatically.</p>
+                <div className="settings-action-row">
+                  <button type="button" className="settings-secondary-btn" onClick={rebuildIndex}>
+                    Rebuild search index
+                  </button>
+                  <button type="button" className="settings-danger-btn" onClick={() => void clearAllBookmarks()}>
+                    Clear all bookmarks
+                  </button>
+                  <button type="button" className="settings-danger-btn" onClick={() => void clearHistory()}>
+                    Clear all history
+                  </button>
                 </div>
-              </div>
-              <p className="settings-note">
-                Current version: <strong>{appVersion || "…"}</strong>
-              </p>
-              <div className="settings-action-row">
-                <button
-                  type="button"
-                  className="settings-secondary-btn"
-                  disabled={checkingUpdate}
-                  onClick={() => void checkForUpdates()}
-                >
-                  {checkingUpdate ? "Checking…" : "Check for updates"}
-                </button>
-              </div>
-              {updateMessage && <p className="settings-callout">{updateMessage}</p>}
-              <div className="settings-card-head" style={{ marginTop: 24 }}>
-                <div>
-                  <h2>Data & search</h2>
-                  <p>Manage local history, site data, and rebuild the search index.</p>
+
+                <div className="settings-divider" />
+
+                <div className="settings-card-head">
+                  <div>
+                    <h2>Site storage</h2>
+                    <p>Bulk-clear cookies, cache, and site storage.</p>
+                  </div>
                 </div>
-              </div>
-              <div className="settings-action-row">
-                <button type="button" className="settings-secondary-btn" onClick={rebuildIndex}>
-                  Rebuild search index
-                </button>
-                <button type="button" className="settings-danger-btn" onClick={() => void clearAllBookmarks()}>
-                  Clear all bookmarks
-                </button>
-                <button type="button" className="settings-danger-btn" onClick={() => void clearHistory()}>
-                  Clear all history
-                </button>
-              </div>
-              <div className="settings-card-head" style={{ marginTop: 24 }}>
-                <div>
-                  <h2>Site data</h2>
-                  <p>Clear cookies, cache, and site storage from browsing sessions.</p>
-                </div>
-              </div>
-              <div className="settings-action-row">
-                <button
-                  type="button"
-                  className="settings-secondary-btn"
-                  onClick={() => {
-                    void window.inix?.siteData.clear({ cache: true }).then(() => {
-                      setSaved(true);
-                      setTimeout(() => setSaved(false), 2000);
-                    });
-                  }}
-                >
-                  Clear cache
-                </button>
-                <button
-                  type="button"
-                  className="settings-secondary-btn"
-                  onClick={() => {
-                    void window.inix?.siteData.clear({ cookies: true, storage: true }).then(() => {
-                      setSaved(true);
-                      setTimeout(() => setSaved(false), 2000);
-                    });
-                  }}
-                >
-                  Clear cookies & storage
-                </button>
-                <button
-                  type="button"
-                  className="settings-danger-btn"
-                  onClick={() => {
-                    void window.inix?.siteData
-                      .clear({ cookies: true, cache: true, storage: true, privateOnly: false })
-                      .then(() => {
+                <div className="settings-action-row">
+                  <button
+                    type="button"
+                    className="settings-secondary-btn"
+                    onClick={() => {
+                      void window.inix?.siteData.clear({ cache: true }).then(() => {
                         setSaved(true);
                         setTimeout(() => setSaved(false), 2000);
                       });
-                  }}
-                >
-                  Clear all site data
+                    }}
+                  >
+                    Clear cache
+                  </button>
+                  <button
+                    type="button"
+                    className="settings-secondary-btn"
+                    onClick={() => {
+                      void window.inix?.siteData.clear({ cookies: true, storage: true }).then(() => {
+                        setSaved(true);
+                        setTimeout(() => setSaved(false), 2000);
+                      });
+                    }}
+                  >
+                    Clear cookies & storage
+                  </button>
+                  <button
+                    type="button"
+                    className="settings-danger-btn"
+                    onClick={() => {
+                      void window.inix?.siteData
+                        .clear({ cookies: true, cache: true, storage: true, privateOnly: false })
+                        .then(() => {
+                          setSaved(true);
+                          setTimeout(() => setSaved(false), 2000);
+                        });
+                    }}
+                  >
+                    Clear all site data
+                  </button>
+                </div>
+                <p className="settings-note">
+                  To remove data for one site at a time, use Privacy & Security → Site data.
+                </p>
+              </section>
+
+              <section className="settings-card">
+                <div className="settings-card-head">
+                  <div>
+                    <h2>Factory reset</h2>
+                    <p>
+                      Wipe all local data and run first-time setup again. The default profile is kept but
+                      emptied.
+                    </p>
+                  </div>
+                </div>
+                <button type="button" className="settings-danger-btn" onClick={() => void factoryReset()}>
+                  Reset Inix &amp; run setup again
                 </button>
-              </div>
-            </section>
+                <p className="settings-note">Close other Inix windows before resetting.</p>
+              </section>
+            </>
           )}
           </main>
       </div>

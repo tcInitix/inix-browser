@@ -228,15 +228,7 @@ export function GeneralSettingsSection({ state, patch }: SectionProps) {
   );
 }
 
-export function AppearanceSettingsSection({
-  state,
-  patch,
-  bookmarkBarEnabled,
-  onBookmarkBarChange,
-}: SectionProps & {
-  bookmarkBarEnabled: boolean;
-  onBookmarkBarChange: (enabled: boolean) => void;
-}) {
+export function AppearanceSettingsSection({ state, patch }: SectionProps) {
   return (
     <section className="settings-card">
       <div className="settings-card-head">
@@ -288,121 +280,109 @@ export function AppearanceSettingsSection({
           <option value={2}>125%</option>
         </select>
       </label>
-
-      <div className="settings-divider" />
-
-      <Switch
-        className="settings-toggle"
-        checked={bookmarkBarEnabled}
-        onChange={(enabled) => {
-          onBookmarkBarChange(enabled);
-          void window.inix?.settings.set("bookmark_bar_enabled", enabled ? "true" : "false");
-          void window.inix?.chrome.setBookmarkBar(enabled);
-        }}
-        label="Show bookmarks bar"
-      />
-      <p className="settings-note">Display the bookmarks bar below the toolbar, like Chrome.</p>
     </section>
   );
 }
 
 export function PrivacySecuritySettingsSection({ state, patch }: SectionProps) {
   return (
-    <>
-      <section className="settings-card">
-        <div className="settings-card-head">
-          <div>
-            <h2>Privacy</h2>
-            <p>Control tracking, encryption, and data retention.</p>
-          </div>
+    <section className="settings-card">
+      <div className="settings-card-head">
+        <div>
+          <h2>Privacy</h2>
+          <p>Control tracking, encryption, and data retention.</p>
         </div>
-        <Switch
-          className="settings-toggle"
-          checked={state.trackerBlockingEnabled}
-          onChange={(v) => patch({ trackerBlockingEnabled: v })}
-          label="Block known trackers and ad scripts"
-        />
-        <Switch
-          className="settings-toggle"
-          checked={state.httpsOnlyMode}
-          onChange={(v) => patch({ httpsOnlyMode: v })}
-          label="Always use secure connections (HTTPS)"
-        />
-        <Switch
-          className="settings-toggle"
-          checked={state.blockThirdPartyCookies}
-          onChange={(v) => patch({ blockThirdPartyCookies: v })}
-          label="Block third-party cookies (best-effort)"
-        />
-        <p className="settings-note">
-          Third-party cookie blocking is applied where Electron supports it. Tracker blocking remains
-          the primary protection.
-        </p>
+      </div>
+      <Switch
+        className="settings-toggle"
+        checked={state.trackerBlockingEnabled}
+        onChange={(v) => patch({ trackerBlockingEnabled: v })}
+        label="Block known trackers and ad scripts"
+      />
+      <Switch
+        className="settings-toggle"
+        checked={state.httpsOnlyMode}
+        onChange={(v) => patch({ httpsOnlyMode: v })}
+        label="Always use secure connections (HTTPS)"
+      />
+      <Switch
+        className="settings-toggle"
+        checked={state.blockThirdPartyCookies}
+        onChange={(v) => patch({ blockThirdPartyCookies: v })}
+        label="Block third-party cookies (best-effort)"
+      />
+      <p className="settings-note">
+        Third-party cookie blocking is applied where Electron supports it. Tracker blocking remains
+        the primary protection.
+      </p>
 
-        <div className="settings-divider" />
+      <div className="settings-divider" />
 
-        <div className="settings-card-head">
-          <div>
-            <h2>On exit</h2>
-            <p>Automatically clear browsing data when you quit Inix.</p>
-          </div>
+      <div className="settings-card-head">
+        <div>
+          <h2>On exit</h2>
+          <p>Automatically clear browsing data when you quit Inix.</p>
         </div>
-        <Switch
-          className="settings-toggle"
-          checked={state.clearCookiesOnExit}
-          onChange={(v) => patch({ clearCookiesOnExit: v })}
-          label="Clear cookies and site storage on exit"
-        />
-        <Switch
-          className="settings-toggle"
-          checked={state.clearCacheOnExit}
-          onChange={(v) => patch({ clearCacheOnExit: v })}
-          label="Clear cached images and files on exit"
-        />
+      </div>
+      <Switch
+        className="settings-toggle"
+        checked={state.clearCookiesOnExit}
+        onChange={(v) => patch({ clearCookiesOnExit: v })}
+        label="Clear cookies and site storage on exit"
+      />
+      <Switch
+        className="settings-toggle"
+        checked={state.clearCacheOnExit}
+        onChange={(v) => patch({ clearCacheOnExit: v })}
+        label="Clear cached images and files on exit"
+      />
 
-        <div className="settings-divider" />
+      <div className="settings-divider" />
 
-        <div className="settings-card-head">
-          <div>
-            <h2>Site permissions defaults</h2>
-            <p>Default behavior before a site asks for access.</p>
-          </div>
+      <div className="settings-card-head">
+        <div>
+          <h2>Site permissions defaults</h2>
+          <p>Default behavior before a site asks for access.</p>
         </div>
-        {permissionSelect("Notifications", state.defaultNotifications, (v) =>
-          patch({ defaultNotifications: v })
-        )}
-        {permissionSelect("Location", state.defaultGeolocation, (v) =>
-          patch({ defaultGeolocation: v })
-        )}
-        {permissionSelect("Camera & microphone", state.defaultMedia, (v) =>
-          patch({ defaultMedia: v })
-        )}
-      </section>
+      </div>
+      {permissionSelect("Notifications", state.defaultNotifications, (v) =>
+        patch({ defaultNotifications: v })
+      )}
+      {permissionSelect("Location", state.defaultGeolocation, (v) =>
+        patch({ defaultGeolocation: v })
+      )}
+      {permissionSelect("Camera & microphone", state.defaultMedia, (v) =>
+        patch({ defaultMedia: v })
+      )}
+    </section>
+  );
+}
 
-      <section className="settings-card">
-        <div className="settings-card-head">
-          <div>
-            <h2>Passwords</h2>
-            <p>Control password saving prompts.</p>
-          </div>
+export function PasswordsAutofillTogglesSection({ state, patch }: SectionProps) {
+  return (
+    <section className="settings-card">
+      <div className="settings-card-head">
+        <div>
+          <h2>Passwords & forms</h2>
+          <p>Control saving and filling credentials on websites.</p>
         </div>
-        <Switch
-          className="settings-toggle"
-          checked={state.offerSavePasswords}
-          onChange={(v) => patch({ offerSavePasswords: v })}
-          label="Offer to save passwords"
-        />
-        <Switch
-          className="settings-toggle"
-          checked={state.autofillEnabled}
-          onChange={(v) => patch({ autofillEnabled: v })}
-          label="Enable autofill on web forms"
-        />
-        <p className="settings-note">
-          Saved passwords and autofill profiles are encrypted in your local vault.
-        </p>
-      </section>
-    </>
+      </div>
+      <Switch
+        className="settings-toggle"
+        checked={state.offerSavePasswords}
+        onChange={(v) => patch({ offerSavePasswords: v })}
+        label="Offer to save passwords"
+      />
+      <Switch
+        className="settings-toggle"
+        checked={state.autofillEnabled}
+        onChange={(v) => patch({ autofillEnabled: v })}
+        label="Enable autofill on web forms"
+      />
+      <p className="settings-note">
+        Saved passwords and checkout profiles are encrypted in your local vault.
+      </p>
+    </section>
   );
 }
 
