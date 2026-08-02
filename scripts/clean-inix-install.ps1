@@ -21,6 +21,18 @@ foreach ($dir in $paths) {
     }
 }
 
+Write-Host "Removing Inix registry entries..."
+$regPaths = @(
+    "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\com.inix.browser",
+    "HKCU:\Software\com.inix.browser"
+)
+foreach ($reg in $regPaths) {
+    if (Test-Path $reg) {
+        Write-Host "  Removing $reg"
+        Remove-Item $reg -Recurse -Force
+    }
+}
+
 Write-Host "Removing stale NSIS staging folders..."
 Get-ChildItem $env:TEMP -Directory | Where-Object { $_.Name -match '^(nsm|nsa)' } | ForEach-Object {
     $staging = Join-Path $_.FullName "old-install"

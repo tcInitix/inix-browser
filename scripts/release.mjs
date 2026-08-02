@@ -178,6 +178,15 @@ function gitOk(...args) {
   }
 }
 
+function tagExistsOnRemote(tag) {
+  const out = execFileSync("git", ["ls-remote", "--tags", "origin", tag], {
+    cwd: ROOT,
+    encoding: "utf8",
+    stdio: ["pipe", "pipe", "pipe"],
+  }).trim();
+  return out.length > 0;
+}
+
 function gitCommitAndTag(version, opts) {
   if (opts.noGit) {
     console.log("Skipping git commit/tag (--no-git).");
@@ -228,11 +237,12 @@ function gitPush(version, opts) {
   }
 
   const tag = `v${version}`;
-  try {
+  if (tagExistsOnRemote(tag)) {
+    // electron-builder --publish always creates the release tag on GitHub during Step 4.
+    console.log(`Tag ${tag} is already on GitHub (created during publish).`);
+  } else {
     run("git", ["push", "origin", tag]);
-  } catch {
-    // electron-builder --publish always creates the tag on GitHub before we push.
-    console.warn(`Tag ${tag} already exists on GitHub — skipping tag push.`);
+    console.log(`Pushed tag ${tag}.`);
   }
 }
 

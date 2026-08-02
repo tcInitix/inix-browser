@@ -149,6 +149,12 @@ export function BookmarkBar({
       setOpenFolderId(null);
       setOverflowOpen(false);
     };
+    const isInsideBarPopup = (target: EventTarget | null) => {
+      const el = target as HTMLElement | null;
+      return !!el?.closest?.(
+        ".bookmark-bar-overflow-menu, .bookmark-bar-folder-popup, .bookmark-bar-menu, .bookmark-bar-folder-dialog"
+      );
+    };
     const onDoc = (e: MouseEvent) => {
       const t = e.target as Node;
       if (barRef.current?.contains(t)) {
@@ -159,11 +165,15 @@ export function BookmarkBar({
       close();
       setFolderDialog(null);
     };
+    const onScroll = (e: Event) => {
+      if (isInsideBarPopup(e.target)) return;
+      close();
+    };
     window.addEventListener("click", onDoc as unknown as EventListener);
-    window.addEventListener("scroll", close, true);
+    window.addEventListener("scroll", onScroll, true);
     return () => {
       window.removeEventListener("click", onDoc as unknown as EventListener);
-      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("scroll", onScroll, true);
     };
   }, [menu, openFolderId, overflowOpen, folderDialog]);
 

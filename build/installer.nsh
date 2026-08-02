@@ -49,14 +49,42 @@ ShowUninstDetails show
     ${if} ${isUpdated}
       DetailPrint "Closing ${PRODUCT_NAME} before installing the update..."
       StrCpy $R9 0
-      ${DoWhile} $R9 < 6
-        Sleep 1000
+      ${DoWhile} $R9 < 10
         nsExec::ExecToLog `taskkill /F /IM "${PRODUCT_FILENAME}.exe" /T`
-        Sleep 500
+        Sleep 1000
         IntOp $R9 $R9 + 1
       ${Loop}
+      Sleep 1500
     ${endif}
   !endif
+!macroend
+
+; When upgrading, the previous version's uninstaller may crash (broken NSIS from older builds).
+; electron-builder would abort; we finish cleanup manually and continue the install.
+!macro customUnInstallCheck
+  ${if} $R0 == 0
+    DetailPrint "Previous version uninstalled successfully."
+  ${else}
+    DetailPrint "Previous uninstaller failed (code $R0) — removing old files manually..."
+    nsExec::ExecToLog `taskkill /F /IM "${PRODUCT_FILENAME}.exe" /T`
+    Sleep 2000
+    ${if} $INSTDIR != ""
+      RMDir /r "$INSTDIR"
+      ${If} ${FileExists} "$INSTDIR\${APP_EXECUTABLE_FILENAME}"
+        DetailPrint "Retrying removal of $INSTDIR..."
+        Sleep 2000
+        nsExec::ExecToLog `taskkill /F /IM "${PRODUCT_FILENAME}.exe" /T`
+        RMDir /r "$INSTDIR"
+      ${EndIf}
+    ${endif}
+    DeleteRegKey SHELL_CONTEXT "${UNINSTALL_REGISTRY_KEY}"
+    DeleteRegKey SHELL_CONTEXT "${INSTALL_REGISTRY_KEY}"
+    !ifdef UNINSTALL_REGISTRY_KEY_2
+      DeleteRegKey SHELL_CONTEXT "${UNINSTALL_REGISTRY_KEY_2}"
+    !endif
+    ClearErrors
+    DetailPrint "Manual cleanup finished; continuing install."
+  ${endif}
 !macroend
 
 !macro customInstall
