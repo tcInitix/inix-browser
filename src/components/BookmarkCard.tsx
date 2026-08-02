@@ -1,6 +1,7 @@
 import { memo } from "react";
 import { type NodeProps } from "@xyflow/react";
 import type { CanvasBookmark } from "../inix.d";
+import { BookmarkIcon } from "./BookmarkIcon";
 
 export interface BookmarkNodeData {
   bookmark: CanvasBookmark;
@@ -20,11 +21,12 @@ function BookmarkCardInner(props: NodeProps) {
   return (
     <div className="bookmark-card">
       <div className="bookmark-card-header">
-        {faviconUrl ? (
-          <img className="bookmark-card-favicon" src={faviconUrl} alt="" />
-        ) : (
-          <span className="bookmark-card-favicon-placeholder">◆</span>
-        )}
+        <BookmarkIcon
+          bookmark={bookmark}
+          storedFavicon={faviconUrl}
+          imgClassName="bookmark-card-favicon"
+          glyphClassName="bookmark-card-favicon-placeholder bookmark-card-favicon-glyph"
+        />
         <span className="bookmark-card-title" title={bookmark.title}>
           {bookmark.title || bookmark.url}
         </span>

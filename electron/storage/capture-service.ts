@@ -12,6 +12,7 @@ import { isVaultUnlocked, saveVaultEntry } from "./vault";
 
 export async function capturePage(tabId: string): Promise<void> {
   if (!isCaptureEnabled()) return;
+  if (tabManager.isHistorySuppressed(tabId)) return;
   if (tabManager.isPrivate(tabId)) return;
 
   const wc = tabManager.getWebContents(tabId);

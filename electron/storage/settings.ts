@@ -81,6 +81,11 @@ export interface Settings {
   // New tab page
   new_tab_show_search: boolean;
   new_tab_show_quick_links: boolean;
+  // Region relay (browser proxy)
+  relay_enabled: boolean;
+  relay_mode: "off" | "inix-tx" | "custom";
+  relay_connect_on_startup: boolean;
+  relay_custom_url: string;
 }
 
 export interface QuickLinkSetting {
@@ -229,6 +234,13 @@ export function getSettings(): Settings {
     open_links_in_new_tab: parseBool(getSetting("open_links_in_new_tab")),
     new_tab_show_search: parseBoolDefaultTrue(getSetting("new_tab_show_search")),
     new_tab_show_quick_links: parseBoolDefaultTrue(getSetting("new_tab_show_quick_links")),
+    relay_enabled: parseBool(getSetting("relay_enabled")),
+    relay_mode:
+      getSetting("relay_mode") === "inix-tx" || getSetting("relay_mode") === "custom"
+        ? (getSetting("relay_mode") as "inix-tx" | "custom")
+        : "off",
+    relay_connect_on_startup: parseBool(getSetting("relay_connect_on_startup")),
+    relay_custom_url: getSetting("relay_custom_url") || "",
   };
 }
 

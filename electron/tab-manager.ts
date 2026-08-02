@@ -126,8 +126,18 @@ export class TabManager {
 
   private panicPreloadTabs = new Set<string>();
 
+  /** Windows currently showing panic safe pages — suppress all history in these windows. */
+  private panicActiveWindows = new Set<number>();
+
   isPanicPreloadTab(tabId: string): boolean {
     return tabId.startsWith(TabManager.PANIC_PRELOAD_PREFIX);
+  }
+
+  /** True while panic mode is active or tab is a background panic preload. */
+  isHistorySuppressed(tabId: string): boolean {
+    if (this.panicPreloadTabs.has(tabId) || this.isPanicPreloadTab(tabId)) return true;
+    const win = this.tabWindows.get(tabId);
+    return win != null && this.panicActiveWindows.has(win.id);
   }
 
   private panicPreloadTabId(index: number): string {
@@ -192,6 +202,7 @@ export class TabManager {
   }
 
   activatePanicPreload(win: BrowserWindow): void {
+    this.panicActiveWindows.add(win.id);
     const firstId = this.panicPreloadTabId(0);
     if (this.views.has(firstId)) {
       this.showTab(win, firstId);
@@ -199,6 +210,7 @@ export class TabManager {
   }
 
   async deactivatePanicPreload(win: BrowserWindow, urls: string[]): Promise<void> {
+    this.panicActiveWindows.delete(win.id);
     const state = this.pw(win);
     if (state.activeTabId && this.isPanicPreloadTab(state.activeTabId)) {
       this.hide(win);
@@ -271,6 +283,10 @@ export class TabManager {
     win.on("enter-full-screen", onLayout);
 
     win.on("leave-full-screen", onLayout);
+
+    win.on("closed", () => {
+      this.panicActiveWindows.delete(win.id);
+    });
 
     state.listeners = { onResize, onLayout };
 
@@ -766,7 +782,7 @@ export class TabManager {
 
 
 
-      if (!this.panicPreloadTabs.has(tabId)) {
+      if (!this.isHistorySuppressed(tabId)) {
         onPageLoaded(tabId);
       }
 
@@ -808,7 +824,7 @@ export class TabManager {
 
       });
 
-      if (!this.panicPreloadTabs.has(tabId)) {
+      if (!this.isHistorySuppressed(tabId)) {
         recordLightVisit(tabId, url, wc.getTitle());
       }
 
@@ -890,6 +906,9 @@ export class TabManager {
 
     this.views.set(tabId, view);
 
+    void import("./proxy/manager").then(({ onTabWebContentsCreated }) => {
+      onTabWebContentsCreated(view.webContents);
+    });
   }
 
 
@@ -1302,6 +1321,10 @@ export class TabManager {
 
     this.views.get(tabId)?.webContents.print({ silent: false, printBackground: true });
 
+  }
+
+  getAllWebContents(): WebContents[] {
+    return [...this.views.values()].map((view) => view.webContents).filter((wc) => !wc.isDestroyed());
   }
 
 }

@@ -42,6 +42,8 @@ import {
   setUpdateInstallHook,
   isQuittingForUpdate,
 } from "./updater";
+import { registerRelayHandlers } from "./proxy/handlers";
+import { initRelayOnStartup } from "./proxy/manager";
 
 declare global {
   // eslint-disable-next-line no-var
@@ -281,6 +283,7 @@ async function bootstrap() {
     startHistoryPurgeScheduler();
     startTabFreezer();
     registerMainIpcHandlers();
+    registerRelayHandlers();
     initAutoUpdater(() => mainWindow);
     setUpdateInstallHook(() => {
       tabManager.shutdownForUpdate();
@@ -294,6 +297,7 @@ async function bootstrap() {
   createWindow();
 
   tabManager.setBookmarkBarVisible(getSettings().bookmark_bar_enabled);
+  await initRelayOnStartup();
 }
 
 if (gotSingleInstanceLock) {

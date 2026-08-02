@@ -26,6 +26,20 @@ export interface EngineStatus {
   error?: string;
 }
 
+export type RelayMode = "off" | "inix-tx" | "custom";
+export type RelayStatus = "off" | "connecting" | "connected" | "error";
+
+export interface RelayState {
+  status: RelayStatus;
+  enabled: boolean;
+  mode: RelayMode;
+  region: string;
+  label: string;
+  exitIp: string | null;
+  error: string | null;
+  configured: boolean;
+}
+
 export interface SearchResult {
   url: string;
   title: string;
@@ -265,6 +279,7 @@ contextBridge.exposeInMainWorld("inix", {
     historyList: (opts?: { limit?: number; tier?: string; query?: string }) =>
       ipcRenderer.invoke("storage:history-list", opts),
     historyClear: (tier?: string) => ipcRenderer.invoke("storage:history-clear", tier),
+    historyDelete: (historyId: number) => ipcRenderer.invoke("storage:history-delete", historyId),
     historyMoveToVault: (historyId: number) =>
       ipcRenderer.invoke("storage:history-move-to-vault", historyId),
   },
@@ -277,6 +292,10 @@ contextBridge.exposeInMainWorld("inix", {
     changePassword: (oldPassword: string, newPassword: string) =>
       ipcRenderer.invoke("vault:change-password", oldPassword, newPassword),
     list: (limit?: number) => ipcRenderer.invoke("vault:list", limit),
+    deleteEntry: (id: number) =>
+      ipcRenderer.invoke("vault:delete-entry", id) as Promise<{ ok: boolean; error?: string }>,
+    clearHistory: () =>
+      ipcRenderer.invoke("vault:clear-history") as Promise<{ ok: boolean; error?: string }>,
   },
   bookmarks: {
     saveFromTab: (
@@ -297,6 +316,8 @@ contextBridge.exposeInMainWorld("inix", {
     setTags: (id: number, tags: string[]) => ipcRenderer.invoke("bookmarks:set-tags", id, tags),
     allTags: () => ipcRenderer.invoke("bookmarks:all-tags"),
     favicon: (path: string) => ipcRenderer.invoke("bookmarks:favicon", path),
+    setIconMode: (id: number, mode: "favicon" | "letter") =>
+      ipcRenderer.invoke("bookmarks:set-icon-mode", id, mode),
     listBar: () => ipcRenderer.invoke("bookmarks:list-bar"),
     setBar: (id: number, onBar: boolean) => ipcRenderer.invoke("bookmarks:set-bar", id, onBar),
     addUrlToBar: (url: string) => ipcRenderer.invoke("bookmarks:add-url-to-bar", url),
@@ -398,5 +419,19 @@ contextBridge.exposeInMainWorld("inix", {
     chromePasswords: (profileDir?: string) =>
       ipcRenderer.invoke("import:chrome-passwords", profileDir),
     pickChromePasswordsCsv: () => ipcRenderer.invoke("import:pick-chrome-passwords-csv"),
+  },
+  relay: {
+    getStatus: () => ipcRenderer.invoke("relay:get-status") as Promise<RelayState>,
+    setEnabled: (enabled: boolean) => ipcRenderer.invoke("relay:set-enabled", enabled) as Promise<RelayState>,
+    setMode: (mode: RelayMode, customUrl?: string) =>
+      ipcRenderer.invoke("relay:set-mode", mode, customUrl) as Promise<RelayState>,
+    test: () => ipcRenderer.invoke("relay:test") as Promise<RelayState>,
+    setConnectOnStartup: (enabled: boolean) =>
+      ipcRenderer.invoke("relay:set-connect-on-startup", enabled) as Promise<boolean>,
+    onStatus: (callback: (state: RelayState) => void) => {
+      const handler = (_e: IpcRendererEvent, state: RelayState) => callback(state);
+      ipcRenderer.on("relay:status", handler);
+      return () => ipcRenderer.removeListener("relay:status", handler);
+    },
   },
 });

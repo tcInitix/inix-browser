@@ -81,6 +81,45 @@ export function getBookmarkTags(bookmarkId: number): string[] {
   ]).map((r) => r.tag);
 }
 
+export type BookmarkIconMode = "favicon" | "letter";
+
+function parseBookmarkMeta(raw: string | undefined | null): Record<string, unknown> {
+  if (!raw?.trim()) return {};
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function buildMetaJson(
+  existingJson: string | undefined | null,
+  meta: { keywords: string[]; articleTags: string[] }
+): string {
+  const prev = parseBookmarkMeta(existingJson);
+  const next: Record<string, unknown> = {
+    keywords: meta.keywords,
+    articleTags: meta.articleTags,
+  };
+  if (prev.icon === "letter") next.icon = "letter";
+  return JSON.stringify(next);
+}
+
+export function setBookmarkIconMode(bookmarkId: number, mode: BookmarkIconMode): boolean {
+  const bookmark = getBookmarkById(bookmarkId);
+  if (!bookmark) return false;
+  const meta = parseBookmarkMeta(bookmark.meta_json);
+  if (mode === "letter") {
+    meta.icon = "letter";
+  } else {
+    delete meta.icon;
+  }
+  runExec("UPDATE bookmarks SET meta_json = ? WHERE id = ?", [JSON.stringify(meta), bookmarkId]);
+  saveDatabase();
+  return true;
+}
+
 export function setBookmarkTags(bookmarkId: number, tags: string[]): void {
   runExec("DELETE FROM bookmark_tags WHERE bookmark_id = ?", [bookmarkId]);
   for (const tag of tags) {
@@ -224,9 +263,10 @@ export async function saveBookmarkFromTab(
           meta.description,
           meta.ogTitle,
           meta.ogImage,
-          JSON.stringify({ keywords: meta.keywords, articleTags: meta.articleTags }),
-          faviconPath,
-          existing.content_id,
+          buildMetaJson(existing.meta_json, {
+            keywords: meta.keywords,
+            articleTags: meta.articleTags,
+          }),
           bookmarkId,
         ]
       );

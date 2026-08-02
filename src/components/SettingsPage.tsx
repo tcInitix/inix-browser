@@ -23,6 +23,7 @@ import {
   saveStandardSettings,
   type StandardSettingsState,
 } from "./settings/StandardSettingsSections";
+import { RegionRelaySettingsSection } from "./settings/RegionRelaySettingsSection";
 
 type AiProvider = "local" | "api";
 
@@ -999,7 +1000,7 @@ export function SettingsPage({
               </label>
               <p className="settings-note">Hibernated tabs keep their URL and scroll position.</p>
 
-              <BrowsingSettingsSection state={standard} patch={patchStandard} />
+              <BrowsingSettingsSection state={standard} patch={patchStandard} variant="section" />
 
               <div className="settings-divider" />
 
@@ -1030,6 +1031,7 @@ export function SettingsPage({
 
           {section === "privacy" && (
             <>
+              <RegionRelaySettingsSection />
               <PrivacySecuritySettingsSection state={standard} patch={patchStandard} />
               <section className="settings-card">
               <div className="settings-card-head">
@@ -1256,8 +1258,9 @@ export function SettingsPage({
                 <p className="settings-note">Set up the vault first to store autofill profiles.</p>
               ) : (
                 <>
-                  <div className="alias-add-row">
+                  <div className="settings-inline-toolbar">
                     <select
+                      className="settings-select"
                       value={selectedAutofillId ?? ""}
                       onChange={(e) => {
                         const id = parseInt(e.target.value, 10);
@@ -1265,6 +1268,11 @@ export function SettingsPage({
                         void refreshAutofill();
                       }}
                     >
+                      {autofillProfiles.length === 0 && (
+                        <option value="" disabled>
+                          No profiles yet
+                        </option>
+                      )}
                       {autofillProfiles.map((p) => (
                         <option key={p.id} value={p.id}>
                           {p.label}
@@ -1274,6 +1282,7 @@ export function SettingsPage({
                     </select>
                     <button
                       type="button"
+                      className="settings-primary-btn"
                       onClick={() =>
                         void window.inix?.autofill.createProfile("New profile").then(() => refreshAutofill())
                       }
@@ -1290,6 +1299,7 @@ export function SettingsPage({
                           onChange={(e) => setAutofillLabel(e.target.value)}
                         />
                       </label>
+                      <div className="settings-form-grid">
                       {(
                         [
                           ["fullName", "Full name"],
@@ -1317,6 +1327,7 @@ export function SettingsPage({
                           />
                         </label>
                       ))}
+                      </div>
                       <div className="settings-actions-row">
                         <button
                           type="button"
@@ -1379,7 +1390,7 @@ export function SettingsPage({
                   Refresh
                 </button>
               </div>
-              <div className="alias-add-row">
+              <div className="settings-inline-toolbar">
                 <input
                   value={newProfileName}
                   onChange={(e) => setNewProfileName(e.target.value)}
@@ -1387,6 +1398,7 @@ export function SettingsPage({
                 />
                 <button
                   type="button"
+                  className="settings-primary-btn"
                   onClick={() =>
                     void window.inix?.profiles
                       .create(newProfileName.trim() || "Profile")
@@ -1396,7 +1408,7 @@ export function SettingsPage({
                       })
                   }
                 >
-                  Create
+                  Create profile
                 </button>
               </div>
               <ul className="alias-list">

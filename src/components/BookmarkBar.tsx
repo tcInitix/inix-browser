@@ -9,6 +9,8 @@ import {
 } from "react";
 import type { BarNode, Bookmark } from "../inix.d";
 import { INIX_BOOKMARK_DRAG } from "./NavBar";
+import { BookmarkIcon } from "./BookmarkIcon";
+import { bookmarkIconMode } from "../utils/bookmark-icon";
 
 export const INIX_BAR_NODE_DRAG = "application/x-inix-bar-node";
 
@@ -318,11 +320,7 @@ export function BookmarkBar({
             setDropTarget(null);
           }}
         >
-          {favicons[b.id] ? (
-            <img src={favicons[b.id]} alt="" className="bookmark-bar-chip-icon" />
-          ) : (
-            <span className="bookmark-bar-chip-icon bookmark-bar-chip-icon-fallback">◆</span>
-          )}
+          <BookmarkIcon bookmark={b} storedFavicon={favicons[b.id]} />
           <span className="bookmark-bar-chip-label">{shortTitle(b.title, b.url)}</span>
         </button>
       </div>
@@ -565,6 +563,20 @@ export function BookmarkBar({
           )}
           {menu.node?.type === "bookmark" && (
             <>
+              <button
+                type="button"
+                onClick={() => {
+                  const node = menu.node;
+                  if (node?.type !== "bookmark") return;
+                  const next = bookmarkIconMode(node.bookmark) === "letter" ? "favicon" : "letter";
+                  void window.inix?.bookmarks.setIconMode(node.bookmark.id, next).then(() => notify());
+                  setMenu(null);
+                }}
+              >
+                {menu.node?.type === "bookmark" && bookmarkIconMode(menu.node.bookmark) === "letter"
+                  ? "Use site icon"
+                  : "Use letter icon"}
+              </button>
               <button
                 type="button"
                 onClick={() => {

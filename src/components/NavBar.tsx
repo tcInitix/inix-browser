@@ -1,6 +1,7 @@
 import { useState, useEffect, forwardRef, useImperativeHandle, useRef, type FormEvent, type KeyboardEvent } from "react";
 import type { Tab } from "../types";
 import { isShellUrl } from "../types";
+import { RelayBadge, RelayPopover, useRelayState } from "./RelayPopover";
 
 export const INIX_BOOKMARK_DRAG = "application/x-inix-bookmark";
 
@@ -24,6 +25,7 @@ interface NavBarProps {
   onReaderMode: () => void;
   bookmarked: boolean;
   aiOpen: boolean;
+  onOpenSettings?: () => void;
 }
 
 export const NavBar = forwardRef<AddressBarHandle, NavBarProps>(function NavBar(
@@ -43,11 +45,14 @@ export const NavBar = forwardRef<AddressBarHandle, NavBarProps>(function NavBar(
     onReaderMode,
     bookmarked,
     aiOpen,
+    onOpenSettings,
   },
   ref
 ) {
   const [input, setInput] = useState(tab.url);
   const inputRef = useRef<HTMLInputElement>(null);
+  const [relayOpen, setRelayOpen] = useState(false);
+  const [relayState, setRelayEnabled] = useRelayState();
 
   useImperativeHandle(ref, () => ({
     focus: () => {
@@ -124,6 +129,26 @@ export const NavBar = forwardRef<AddressBarHandle, NavBarProps>(function NavBar(
           {bookmarked ? "★" : "☆"}
         </button>
       </div>
+      <div className="address-form-wrap">
+        <RelayBadge
+          state={relayState}
+          open={relayOpen}
+          onClick={() => setRelayOpen((o) => !o)}
+        />
+        <RelayPopover
+          open={relayOpen}
+          state={relayState}
+          onClose={() => setRelayOpen(false)}
+          onToggle={setRelayEnabled}
+          onOpenSettings={
+            onOpenSettings
+              ? () => {
+                  setRelayOpen(false);
+                  onOpenSettings();
+                }
+              : undefined
+          }
+        />
       <form className="address-form" onSubmit={handleSubmit}>
         {canDragSite && (
           <div
@@ -169,6 +194,7 @@ export const NavBar = forwardRef<AddressBarHandle, NavBarProps>(function NavBar(
           spellCheck={false}
         />
       </form>
+      </div>
       {!isShellUrl(tab.url) && (
         <button className="nav-btn" title="Reader view" onClick={onReaderMode}>
           📖

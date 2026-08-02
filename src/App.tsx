@@ -972,6 +972,7 @@ export default function App() {
         onReaderMode={() => void openReaderMode()}
         bookmarked={bookmarked}
         aiOpen={sidebarOpen}
+        onOpenSettings={openSettings}
       />
       {bookmarkBarEnabled && !immersive && (
         <BookmarkBar

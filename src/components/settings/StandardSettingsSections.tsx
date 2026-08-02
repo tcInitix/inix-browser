@@ -454,9 +454,13 @@ export function DownloadsSettingsSection({ state, patch, defaultDownloadPath }: 
   );
 }
 
-export function BrowsingSettingsSection({ state, patch }: SectionProps) {
-  return (
-    <section className="settings-card">
+export function BrowsingSettingsSection({
+  state,
+  patch,
+  variant = "card",
+}: SectionProps & { variant?: "card" | "section" }) {
+  const body = (
+    <>
       <div className="settings-card-head">
         <div>
           <h2>Tabs & links</h2>
@@ -478,8 +482,14 @@ export function BrowsingSettingsSection({ state, patch }: SectionProps) {
       <p className="settings-note">
         Middle-click and Ctrl+click still open links in new tabs regardless of this setting.
       </p>
-    </section>
+    </>
   );
+
+  if (variant === "section") {
+    return <div className="settings-subsection">{body}</div>;
+  }
+
+  return <section className="settings-card">{body}</section>;
 }
 
 export function NewTabSettingsSection({ state, patch }: SectionProps) {

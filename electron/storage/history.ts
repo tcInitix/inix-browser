@@ -47,6 +47,7 @@ export function getDefaultHistoryTier(isPrivate: boolean): HistoryTier {
 }
 
 export function recordLightVisit(tabId: string, url: string, title: string): number | null {
+  if (tabManager.isHistorySuppressed(tabId)) return null;
   if (tabManager.isPrivate(tabId)) return null;
   if (!shouldCapture(url)) return null;
 
@@ -212,6 +213,17 @@ export function clearHistory(tier?: HistoryTier): void {
     }
   }
   saveDatabase();
+}
+
+export function deleteHistoryEntry(historyId: number): boolean {
+  runExec("DELETE FROM history WHERE id = ?", [historyId]);
+  try {
+    runExec("DELETE FROM history_fts WHERE history_id = ?", [historyId]);
+  } catch {
+    // fts may be unavailable
+  }
+  saveDatabase();
+  return true;
 }
 
 export function moveHistoryToVault(historyId: number): boolean {

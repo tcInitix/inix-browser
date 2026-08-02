@@ -14,6 +14,20 @@ export type ThemeMode = "dark" | "light" | "system";
 export type UiFontScale = "small" | "medium" | "large";
 export type PermissionDefault = "ask" | "allow" | "block";
 
+export type RelayMode = "off" | "inix-tx" | "custom";
+export type RelayStatus = "off" | "connecting" | "connected" | "error";
+
+export interface RelayState {
+  status: RelayStatus;
+  enabled: boolean;
+  mode: RelayMode;
+  region: string;
+  label: string;
+  exitIp: string | null;
+  error: string | null;
+  configured: boolean;
+}
+
 export interface InixSettings {
   ai_provider: "local" | "api";
   engine_host: string;
@@ -60,6 +74,10 @@ export interface InixSettings {
   open_links_in_new_tab: boolean;
   new_tab_show_search: boolean;
   new_tab_show_quick_links: boolean;
+  relay_enabled: boolean;
+  relay_mode: "off" | "inix-tx" | "custom";
+  relay_connect_on_startup: boolean;
+  relay_custom_url: string;
 }
 
 export interface Bookmark {
@@ -339,6 +357,7 @@ export interface InixAPI {
     bookmarkCheck: (url: string) => Promise<boolean>;
     historyList: (opts?: { limit?: number; tier?: HistoryTier; query?: string }) => Promise<HistoryEntry[]>;
     historyClear: (tier?: HistoryTier) => Promise<boolean>;
+    historyDelete: (historyId: number) => Promise<boolean>;
     historyMoveToVault: (historyId: number) => Promise<{ ok: boolean; error?: string }>;
   };
   vault: {
@@ -349,6 +368,8 @@ export interface InixAPI {
     lock: () => Promise<boolean>;
     changePassword: (oldPassword: string, newPassword: string) => Promise<{ ok: boolean; error?: string }>;
     list: (limit?: number) => Promise<VaultEntry[]>;
+    deleteEntry: (id: number) => Promise<{ ok: boolean; error?: string }>;
+    clearHistory: () => Promise<{ ok: boolean; error?: string }>;
   };
   bookmarks: {
     saveFromTab: (
@@ -368,6 +389,7 @@ export interface InixAPI {
     setTags: (id: number, tags: string[]) => Promise<boolean>;
     allTags: () => Promise<string[]>;
     favicon: (path: string) => Promise<string | null>;
+    setIconMode: (id: number, mode: "favicon" | "letter") => Promise<boolean>;
     listBar: () => Promise<Bookmark[]>;
     setBar: (id: number, onBar: boolean) => Promise<boolean>;
     addUrlToBar: (url: string) => Promise<boolean>;
@@ -455,6 +477,14 @@ export interface InixAPI {
     pickChromeBookmarks: () => Promise<ImportResult>;
     chromePasswords: (profileDir?: string) => Promise<ImportResult>;
     pickChromePasswordsCsv: () => Promise<ImportResult>;
+  };
+  relay: {
+    getStatus: () => Promise<RelayState>;
+    setEnabled: (enabled: boolean) => Promise<RelayState>;
+    setMode: (mode: RelayMode, customUrl?: string) => Promise<RelayState>;
+    test: () => Promise<RelayState>;
+    setConnectOnStartup: (enabled: boolean) => Promise<boolean>;
+    onStatus: (callback: (state: RelayState) => void) => () => void;
   };
 }
 

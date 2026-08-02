@@ -13,8 +13,10 @@ import {
   listBarBookmarks,
   setBookmarkOnBar,
   addCurrentUrlToBar,
+  setBookmarkIconMode,
   type BookmarkFilter,
   type SaveBookmarkOptions,
+  type BookmarkIconMode,
 } from "./bookmarks";
 import { listAliases, setAlias, removeAlias, resolveAlias, aliasesAsMap, seedDefaultAliases } from "./aliases";
 import {
@@ -32,6 +34,7 @@ import {
 import { getSettings, setSetting, getAllSettings } from "./settings";
 import {
   clearHistory,
+  deleteHistoryEntry,
   getRecentHistory,
   moveHistoryToVault,
   getPageContentById,
@@ -47,6 +50,8 @@ import {
   changeVaultPassword,
   listVaultEntries,
   moveHistoryEntryToVault,
+  clearVaultHistory,
+  removeVaultEntry,
 } from "./vault";
 import { rebuildIndex } from "./vector-index";
 import { rebuildFtsIndex } from "./history";
@@ -84,6 +89,9 @@ export function registerStorageHandlers(): void {
   });
   ipcMain.handle("bookmarks:get-tags", (_e, id: number) => getBookmarkTags(id));
   ipcMain.handle("bookmarks:favicon", (_e, path: string) => getFaviconDataUrl(path));
+  ipcMain.handle("bookmarks:set-icon-mode", (_e, id: number, mode: BookmarkIconMode) =>
+    setBookmarkIconMode(id, mode)
+  );
   ipcMain.handle("bookmarks:all-tags", () => getAllTags());
   ipcMain.handle("bookmarks:list-bar", () => listBarBookmarks());
   ipcMain.handle("bookmarks:set-bar", (_e, id: number, onBar: boolean) =>
@@ -175,6 +183,10 @@ export function registerStorageHandlers(): void {
     clearHistory(tier as "standard" | "transient" | "vaulted" | undefined);
     return true;
   });
+  ipcMain.handle("storage:history-delete", (_e, historyId: number) => {
+    deleteHistoryEntry(historyId);
+    return true;
+  });
   ipcMain.handle("storage:history-move-to-vault", (_e, historyId: number) => {
     if (!isVaultUnlocked()) return { ok: false, error: "Vault locked" };
     const rows = runQuery<HistoryEntry>(
@@ -201,6 +213,16 @@ export function registerStorageHandlers(): void {
     changeVaultPassword(oldPw, newPw)
   );
   ipcMain.handle("vault:list", (_e, limit?: number) => listVaultEntries(limit));
+  ipcMain.handle("vault:delete-entry", (_e, id: number) => {
+    if (!isVaultUnlocked()) return { ok: false, error: "Vault locked" };
+    removeVaultEntry(id);
+    return { ok: true };
+  });
+  ipcMain.handle("vault:clear-history", () => {
+    if (!isVaultUnlocked()) return { ok: false, error: "Vault locked" };
+    clearVaultHistory();
+    return { ok: true };
+  });
 
   ipcMain.handle("settings:get", () => getAllSettings());
   ipcMain.handle("settings:set", (_e, key: string, value: string) => {
