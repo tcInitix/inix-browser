@@ -10,6 +10,7 @@
  *   npm run release
  *   node scripts/release.mjs --no-push        # publish to GitHub only, skip git push
  *   node scripts/release.mjs --skip-notes     # skip Ollama (use existing publish.md)
+ *   node scripts/release.mjs --republish      # build/publish current version (no bump)
  */
 
 import { execFileSync, execSync } from "node:child_process";
@@ -31,6 +32,8 @@ function parseArgs(argv) {
     skipNotes: false,
     dryRun: false,
     notesOnly: false,
+    republish: false,
+    forceNotes: false,
     model: DEFAULT_MODEL,
   };
   for (const arg of argv) {
@@ -39,6 +42,8 @@ function parseArgs(argv) {
     else if (arg === "--skip-notes") opts.skipNotes = true;
     else if (arg === "--dry-run") opts.dryRun = true;
     else if (arg === "--notes-only") opts.notesOnly = true;
+    else if (arg === "--republish") opts.republish = true;
+    else if (arg === "--force") opts.forceNotes = true;
     else if (arg === "--help" || arg === "-h") {
       console.log(`Inix release — bump version, notes, build, GitHub publish
 
@@ -48,6 +53,8 @@ Options:
   --no-push       Skip git push after publish
   --no-git        Skip git commit and tag
   --skip-notes    Skip Ollama; use existing release-notes/publish.md
+  --republish     Build/publish package.json version without bumping (recovery)
+  --force         Generate notes even if no git changes since last tag
   --notes-only    Only upload notes to the current package.json version on GitHub (no build)
   --dry-run       Preview version + notes only, no build or publish
   -h, --help      Show this help
@@ -232,6 +239,7 @@ async function main() {
         out: PUBLISH_NOTES,
         plain: true,
         model: opts.model,
+        force: opts.forceNotes,
       });
     }
     await publishNotesToGithub(version);
@@ -239,10 +247,16 @@ async function main() {
   }
 
   const currentVersion = readPackageVersion();
-  const nextVersion = bumpPatchVersion(currentVersion);
+  const nextVersion = opts.republish ? currentVersion : bumpPatchVersion(currentVersion);
 
   console.log("\n=== Inix release ===");
-  console.log(`Version: v${currentVersion} → v${nextVersion}\n`);
+  if (opts.republish) {
+    console.log(`Republishing v${currentVersion} (no version bump)\n`);
+    opts.noGit = true;
+    opts.skipNotes = true;
+  } else {
+    console.log(`Version: v${currentVersion} → v${nextVersion}\n`);
+  }
 
   if (!opts.skipNotes) {
     console.log("Step 1/5 — Generate release notes (Ollama)…");
@@ -251,6 +265,7 @@ async function main() {
       out: PUBLISH_NOTES,
       plain: true,
       model: opts.model,
+      force: opts.forceNotes,
     });
     console.log("\n--- Release notes preview ---\n");
     console.log(result.notes);
@@ -258,10 +273,18 @@ async function main() {
 
     const archivePath = path.join(ROOT, "release-notes", `v${nextVersion}.md`);
     fs.copyFileSync(PUBLISH_NOTES, archivePath);
-  } else if (!fs.existsSync(PUBLISH_NOTES)) {
-    throw new Error(`Missing ${path.relative(ROOT, PUBLISH_NOTES)}. Run without --skip-notes first.`);
   } else {
-    console.log("Step 1/5 — Skipping notes (--skip-notes), using publish.md");
+    const archived = path.join(ROOT, "release-notes", `v${nextVersion}.md`);
+    if (fs.existsSync(archived)) {
+      fs.copyFileSync(archived, PUBLISH_NOTES);
+      console.log(`Step 1/5 — Using ${path.relative(ROOT, archived)}`);
+    } else if (fs.existsSync(PUBLISH_NOTES)) {
+      console.log("Step 1/5 — Using release-notes/publish.md");
+    } else {
+      throw new Error(
+        `Missing release notes. Add release-notes/v${nextVersion}.md or release-notes/publish.md.`
+      );
+    }
   }
 
   if (opts.dryRun) {
@@ -269,15 +292,20 @@ async function main() {
     return;
   }
 
-  console.log("Step 2/5 — Bump version…");
-  writePackageVersion(nextVersion);
-  console.log(`package.json → ${nextVersion}`);
+  if (!opts.republish) {
+    console.log("Step 2/5 — Bump version…");
+    writePackageVersion(nextVersion);
+    console.log(`package.json → ${nextVersion}`);
 
-  console.log("Step 3/5 — Commit & tag…");
-  try {
-    gitCommitAndTag(nextVersion, opts);
-  } catch (err) {
-    console.warn("Git commit/tag issue (continuing to build):", err.message || err);
+    console.log("Step 3/5 — Commit & tag…");
+    try {
+      gitCommitAndTag(nextVersion, opts);
+    } catch (err) {
+      console.warn("Git commit/tag issue (continuing to build):", err.message || err);
+    }
+  } else {
+    console.log("Step 2/5 — Skipped (republish)");
+    console.log("Step 3/5 — Skipped (republish)");
   }
 
   ensureGhToken();

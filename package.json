@@ -1,6 +1,6 @@
 {
   "name": "inix-browser",
-  "version": "0.1.19",
+  "version": "0.1.20",
   "description": "Inix — a fast, private browser",
   "homepage": "https://github.com/tcInitix/inix-browser",
   "main": "dist-electron/main.js",
@@ -10,6 +10,7 @@
     "installer:assets": "powershell -ExecutionPolicy Bypass -File scripts/generate-installer-assets.ps1 && node scripts/generate-icon-ico.mjs",
     "build:inix": "vite build && electron-builder",
     "release": "node scripts/release.mjs",
+    "release:republish": "node scripts/release.mjs --republish",
     "release:local": "npm run installer:assets && tsc && vite build && electron-builder",
     "release:publish": "node scripts/release.mjs",
     "release:notes": "node scripts/generate-release-notes.mjs",
