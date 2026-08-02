@@ -135,18 +135,18 @@ interface SettingsPageProps {
 const NAV: { id: SettingsSection; label: string; icon: string }[] = [
   { id: "general", label: "General", icon: "⚙" },
   { id: "appearance", label: "Appearance", icon: "◐" },
-  { id: "privacy", label: "Privacy & security", icon: "◈" },
+  { id: "privacy", label: "Privacy & Security", icon: "◈" },
   { id: "downloads", label: "Downloads", icon: "↓" },
-  { id: "tabs", label: "Tabs & memory", icon: "▣" },
+  { id: "tabs", label: "Tabs & Memory", icon: "▣" },
   { id: "history", label: "History", icon: "◷" },
-  { id: "newtab", label: "New tab", icon: "⌂" },
+  { id: "newtab", label: "New Tab", icon: "⌂" },
   { id: "vault", label: "Vault", icon: "⛨" },
   { id: "autofill", label: "Autofill", icon: "▤" },
   { id: "profiles", label: "Profiles", icon: "◉" },
   { id: "library", label: "Library", icon: "★" },
-  { id: "routes", label: "Quick routes", icon: "↗" },
+  { id: "routes", label: "Quick Routes", icon: "↗" },
   { id: "ai", label: "Inix AI", icon: "✦" },
-  { id: "data", label: "Data & import", icon: "⌂" },
+  { id: "data", label: "Data & Import", icon: "⌂" },
 ];
 
 export function SettingsPage({
