@@ -69,13 +69,18 @@ export function initAutoUpdater(windowGetter: () => BrowserWindowType | null): v
   });
 
   autoUpdater.on("update-available", (info) => {
-    void (async () => {
-      const releaseNotes = await resolveReleaseNotes(info.version, info.releaseNotes);
-      send("update:available", {
-        version: info.version,
-        releaseNotes: releaseNotes ?? "",
+    const releaseNotes = normalizeReleaseNotes(info.releaseNotes) ?? "";
+    send("update:available", {
+      version: info.version,
+      releaseNotes,
+    });
+    if (!releaseNotes) {
+      void resolveReleaseNotes(info.version, info.releaseNotes).then((notes) => {
+        if (notes) {
+          send("update:notes", { version: info.version, releaseNotes: notes });
+        }
       });
-    })();
+    }
   });
 
   autoUpdater.on("update-not-available", () => {
@@ -91,8 +96,12 @@ export function initAutoUpdater(windowGetter: () => BrowserWindowType | null): v
   });
 
   autoUpdater.on("error", (err) => {
-    if (isSilentUpdateError(err.message)) return;
+    if (isSilentUpdateError(err.message)) {
+      send("update:not-available");
+      return;
+    }
     console.warn("[updater]", err.message.slice(0, 200));
+    send("update:error", { message: err.message });
   });
 
   setInterval(() => {

@@ -62,15 +62,16 @@
   --space-8: 40px;
 
   /* Shell dimensions — keep in sync with tab-manager layout constants */
-  --title-bar-height: 40px;
-  --tab-bar-height: 42px;
-  --nav-bar-height: 50px;
-  --bookmark-bar-height: 36px;
+  --chrome-header-height: 44px;
+  --title-bar-height: 0px;
+  --tab-bar-height: var(--chrome-header-height);
+  --nav-bar-height: 46px;
+  --bookmark-bar-height: 34px;
   --status-bar-height: 32px;
-  --chrome-btn-size: 38px;
-  --chrome-btn-font: 18px;
-  --title-action-size: 36px;
-  --title-action-font: 17px;
+  --chrome-btn-size: 32px;
+  --chrome-btn-font: 16px;
+  --title-action-size: 32px;
+  --title-action-font: 15px;
   --sidebar-width: 360px;
   --content-max-width: 1080px;
   --settings-sidebar-width: 260px;
@@ -401,7 +402,77 @@ h3,
   background: var(--bg-base);
 }
 
-/* ── Title Bar ── */
+/* ── Browser header (tabs + tools + window controls) ── */
+.browser-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: var(--chrome-header-height);
+  padding: 0 0 0 12px;
+  background: linear-gradient(180deg, var(--bg-surface) 0%, color-mix(in srgb, var(--bg-surface) 92%, var(--bg-base)) 100%);
+  border-bottom: 1px solid var(--border-hairline);
+  -webkit-app-region: drag;
+  user-select: none;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 9700;
+}
+
+.browser-header-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  -webkit-app-region: no-drag;
+}
+
+.browser-header-logo {
+  height: 20px;
+  width: auto;
+  object-fit: contain;
+  display: block;
+  opacity: 0.92;
+}
+
+.browser-header-private {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #c4b5fd;
+  background: rgba(124, 58, 237, 0.16);
+  border: 1px solid rgba(124, 58, 237, 0.28);
+  border-radius: var(--radius-pill);
+  padding: 2px 7px;
+}
+
+.browser-header-tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 4px;
+  -webkit-app-region: no-drag;
+}
+
+.chrome-icon-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  border: 1px solid transparent;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+
+.chrome-icon-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--border-hairline);
+}
+
+/* ── Title Bar (legacy — kept for reference) ── */
 .title-bar {
   display: flex;
   align-items: center;
@@ -451,8 +522,8 @@ h3,
 }
 
 .win-btn {
-  width: 48px;
-  height: var(--title-bar-height);
+  width: 46px;
+  height: var(--chrome-header-height);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -474,13 +545,48 @@ h3,
 /* ── Tab Bar ── */
 .tab-bar {
   display: flex;
-  align-items: stretch;
+  align-items: center;
   height: var(--tab-bar-height);
   background: var(--bg-surface);
   border-bottom: 1px solid var(--border-subtle);
   padding: 0 6px;
   gap: 3px;
   flex-shrink: 0;
+}
+
+.tab-bar-embedded {
+  flex: 1;
+  min-width: 0;
+  height: auto;
+  background: transparent;
+  border-bottom: none;
+  padding: 0;
+  -webkit-app-region: no-drag;
+}
+
+.tab-bar-embedded .tab-list {
+  align-items: center;
+}
+
+.tab-bar-embedded .tab {
+  height: 30px;
+  margin-top: 0;
+  min-width: 110px;
+  max-width: 190px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+}
+
+.tab-bar-embedded .tab-active {
+  background: var(--bg-elevated);
+  border-color: var(--border);
+  box-shadow: var(--shadow-sm);
+}
+
+.tab-bar-embedded .tab-new {
+  width: 30px;
+  height: 30px;
+  margin-top: 0;
 }
 
 .tab-list {
@@ -599,11 +705,30 @@ h3,
   align-items: center;
   gap: 10px;
   height: var(--nav-bar-height);
-  padding: 0 14px;
+  padding: 0 12px;
   background: var(--bg-elevated);
   border-bottom: 1px solid var(--border-subtle);
   flex-shrink: 0;
   -webkit-app-region: no-drag;
+}
+
+.nav-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--bg-input) 70%, transparent);
+  border: 1px solid var(--border-hairline);
+  flex-shrink: 0;
+}
+
+.nav-group-travel {
+  margin-right: 2px;
+}
+
+.nav-group-page {
+  margin-left: 2px;
 }
 
 .nav-controls {
@@ -614,7 +739,7 @@ h3,
 .nav-btn {
   width: var(--chrome-btn-size);
   height: var(--chrome-btn-size);
-  border-radius: var(--radius-sm);
+  border-radius: calc(var(--radius-sm) - 1px);
   font-size: var(--chrome-btn-font);
   color: var(--text-secondary);
   display: flex;
@@ -649,16 +774,18 @@ h3,
 }
 
 .bookmark-bar-empty {
-  justify-content: center;
+  justify-content: flex-start;
+  padding-left: 12px;
 }
 
 .bookmark-bar-empty-hint {
   position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 12px;
+  left: 14px;
+  transform: none;
+  font-size: 11px;
   color: var(--text-muted);
   pointer-events: none;
+  opacity: 0.75;
 }
 
 .bookmark-bar-measure {
@@ -1239,13 +1366,13 @@ h3,
   flex: 1;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   background: var(--bg-input);
   border: 1px solid var(--border);
-  border-radius: var(--radius-pill);
-  padding: 0 16px;
-  height: 40px;
-  box-shadow: var(--shadow-sm);
+  border-radius: var(--radius);
+  padding: 0 12px;
+  height: 36px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 
@@ -4791,11 +4918,11 @@ h3,
 
 .downloads-panel {
   position: fixed;
-  top: calc(var(--title-bar-height) + var(--tab-bar-height) + var(--nav-bar-height) + 6px);
+  top: calc(var(--chrome-header-height) + var(--nav-bar-height) + 6px);
   right: 12px;
   z-index: 8000;
   width: min(360px, calc(100vw - 24px));
-  max-height: min(420px, calc(100vh - var(--title-bar-height) - var(--tab-bar-height) - var(--nav-bar-height) - 48px));
+  max-height: min(420px, calc(100vh - var(--chrome-header-height) - var(--nav-bar-height) - 48px));
   background: var(--bg-surface);
   border: 1px solid var(--border-hairline);
   border-radius: var(--radius-lg);
@@ -4807,7 +4934,7 @@ h3,
 
 .inix-shell.bookmark-bar-open .downloads-panel {
   top: calc(
-    var(--title-bar-height) + var(--tab-bar-height) + var(--nav-bar-height) +
+    var(--chrome-header-height) + var(--nav-bar-height) +
       var(--bookmark-bar-height) + 6px
   );
 }
@@ -5172,6 +5299,7 @@ h3,
   transition: width 0.2s ease;
 }
 
+.inix-shell.immersive .browser-header,
 .inix-shell.immersive .title-bar,
 .inix-shell.immersive .tab-bar,
 .inix-shell.immersive .nav-bar,

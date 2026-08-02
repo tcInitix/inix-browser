@@ -1,28 +1,19 @@
-# Inix v0.1.41
+# Inix v0.1.42
 
-**Asynchronous Password Import Improvements**
+Enhanced DPAPI Decryption and Installer Improvements
 
 ## What's new
 
-### Improved Installer Assets Generation
+### DPAPI Decryption
 
-Our installer now checks if an icon exists and generates one if necessary, ensuring a smoother installation process.
-
-### New Icon
-
-A new PNG icon has been added to our application and is now displayed by default.
-
-### Changes to Autofill Tab
-
-Autofill profiles are created with their respective settings (e.g., Settings → Tabs).
+The ability to decrypt many DPAPI blobs in one PowerShell invocation has been added, reducing the time it takes to import passwords from Windows profiles.
 
 ## Improvements
 
-*   The vault unlock feature now displays a message when unlocking the vault for the first time.
-*   Auto-fill profiles are created with their respective settings (e.g., Settings → Tabs).
-*   The Autofill Add button is no longer hidden in the Chrome passwords import dialog.
+*   **Improved Installer Assets Generation**: The installer now checks if an icon exists and generates one if necessary, ensuring a smoother installation process.
+*   **New Icon**: A new PNG icon has been added to our application and is now displayed by default.
+*   **Autofill Profiles**: Autofill profiles are created with their respective settings (e.g., Settings → Tabs), providing a better user experience.
 
 ## Fixes
 
-*   Improved error handling during password import from CSV files.
-*   Fixed an issue where importing passwords from a profile would sometimes fail to save the credentials.
+*   **Vault Unlock Feedback**: The vault unlock feature now displays a message when unlocking the vault for the first time, improving the overall user experience.

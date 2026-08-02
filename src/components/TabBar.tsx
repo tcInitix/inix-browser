@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import type { Tab } from "../types";
+import { IconClose, IconPlus } from "./chrome/ChromeIcons";
 
 interface TabBarProps {
   tabs: Tab[];
@@ -12,6 +13,7 @@ interface TabBarProps {
   onPin: (id: string) => void;
   onDuplicate: (id: string) => void;
   onReorder: (fromIndex: number, toIndex: number) => void;
+  embedded?: boolean;
 }
 
 export function TabBar({
@@ -25,6 +27,7 @@ export function TabBar({
   onPin,
   onDuplicate,
   onReorder,
+  embedded = false,
 }: TabBarProps) {
   const dragIndex = useRef<number | null>(null);
   const [contextMenu, setContextMenu] = useState<{ tabId: string; x: number; y: number } | null>(null);
@@ -46,7 +49,7 @@ export function TabBar({
   };
 
   return (
-    <div className="tab-bar">
+    <div className={`tab-bar${embedded ? " tab-bar-embedded" : ""}`}>
       <div className="tab-list">
         {sortedTabs.map((tab) => (
           <div
@@ -108,13 +111,13 @@ export function TabBar({
                 }}
                 aria-label="Close tab"
               >
-                ✕
+                <IconClose size={12} />
               </button>
             )}
           </div>
         ))}
-        <button className="tab-new" onClick={onNewTab} aria-label="New tab">
-          +
+        <button className="tab-new" onClick={onNewTab} aria-label="New tab" title="New tab">
+          <IconPlus size={14} />
         </button>
       </div>
 

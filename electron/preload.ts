@@ -235,6 +235,16 @@ contextBridge.exposeInMainWorld("inix", {
       ipcRenderer.on("update:error", handler);
       return () => ipcRenderer.removeListener("update:error", handler);
     },
+    onNotes: (
+      callback: (info: { version: string; releaseNotes: string }) => void
+    ) => {
+      const handler = (
+        _e: Electron.IpcRendererEvent,
+        info: { version: string; releaseNotes: string }
+      ) => callback(info);
+      ipcRenderer.on("update:notes", handler);
+      return () => ipcRenderer.removeListener("update:notes", handler);
+    },
   },
   ai: {
     getStatus: (): Promise<EngineStatus> => ipcRenderer.invoke("ai:status"),

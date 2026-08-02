@@ -19,6 +19,7 @@ interface UpdatePromptProps {
   onDownload: () => void;
   onInstall: () => void;
   onDismiss: () => void;
+  dismissLabel?: string;
 }
 
 function safeNotes(notes: string | undefined, version: string): string | undefined {
@@ -28,7 +29,7 @@ function safeNotes(notes: string | undefined, version: string): string | undefin
   return prepared || undefined;
 }
 
-export function UpdatePrompt({ state, onDownload, onInstall, onDismiss }: UpdatePromptProps) {
+export function UpdatePrompt({ state, onDownload, onInstall, onDismiss, dismissLabel = "Not now" }: UpdatePromptProps) {
   useEffect(() => {
     if (state.status === "idle" || state.status === "downloading") return;
     const onKey = (e: KeyboardEvent) => {
@@ -122,7 +123,7 @@ export function UpdatePrompt({ state, onDownload, onInstall, onDismiss }: Update
 
         <footer className="permission-actions update-prompt-actions">
           <button type="button" className="permission-deny" onClick={onDismiss}>
-            Not now
+            {dismissLabel}
           </button>
           <button type="button" className="permission-allow" onClick={onDownload}>
             Download update

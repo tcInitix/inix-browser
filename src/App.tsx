@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
-import { TitleBar } from "./components/TitleBar";
-import { TabBar } from "./components/TabBar";
+import { BrowserHeader } from "./components/BrowserHeader";
 import { NavBar, type AddressBarHandle } from "./components/NavBar";
 import { NewTabPage } from "./components/NewTabPage";
 import { LibraryPanel } from "./components/LibraryPanel";
@@ -54,6 +53,7 @@ export default function App() {
   const [sessionReady, setSessionReady] = useState(false);
   const [bootDone, setBootDone] = useState(false);
   const [updateCheckDone, setUpdateCheckDone] = useState(false);
+  const [bootBlockedByUpdate, setBootBlockedByUpdate] = useState(false);
   const [bootStatus, setBootStatus] = useState<string | undefined>(undefined);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -101,6 +101,8 @@ export default function App() {
   const focusAddressBarForTabRef = useRef<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const restored = useRef(false);
+  const bootDoneRef = useRef(false);
+  bootDoneRef.current = bootDone;
 
   const activeTab = tabs.find((t) => t.id === activeTabId) ?? tabs[0];
 
@@ -913,13 +915,26 @@ export default function App() {
           version: info.version,
           releaseNotes: info.releaseNotes,
         });
+        if (!bootDoneRef.current) {
+          setBootBlockedByUpdate(true);
+          setBootStatus("Update available");
+        }
         finishBootUpdateCheck();
       }),
       window.inix?.update.onNotAvailable(() => {
+        if (!bootDoneRef.current) setBootStatus(undefined);
         finishBootUpdateCheck();
       }),
       window.inix?.update.onError(() => {
+        if (!bootDoneRef.current) setBootStatus(undefined);
         finishBootUpdateCheck();
+      }),
+      window.inix?.update.onNotes((info) => {
+        setUpdateState((prev) =>
+          prev.status === "available" && prev.version === info.version
+            ? { ...prev, releaseNotes: info.releaseNotes }
+            : prev
+        );
       }),
       window.inix?.update.onProgress((p) =>
         setUpdateState({ status: "downloading", percent: p.percent })
@@ -937,9 +952,15 @@ export default function App() {
       }
 
       setBootStatus("Checking for updates…");
-      timeoutId = setTimeout(finishBootUpdateCheck, 10_000);
+      timeoutId = setTimeout(() => {
+        if (!bootDoneRef.current) setBootStatus(undefined);
+        finishBootUpdateCheck();
+      }, 12_000);
       const result = await window.inix?.update.check();
-      if (!result?.ok) finishBootUpdateCheck();
+      if (!result?.ok) {
+        if (!bootDoneRef.current) setBootStatus(undefined);
+        finishBootUpdateCheck();
+      }
     })();
 
     return () => {
@@ -976,10 +997,19 @@ export default function App() {
     return () => unsub?.();
   }, []);
 
+  const handleUpdateDismiss = () => {
+    setUpdateState({ status: "idle" });
+    if (!bootDone) {
+      setBootBlockedByUpdate(false);
+      setBootStatus(undefined);
+    }
+  };
+
   const updatePrompt = (
     <UpdatePrompt
       state={updateState}
-      onDismiss={() => setUpdateState({ status: "idle" })}
+      dismissLabel={!bootDone ? "Continue without updating" : "Not now"}
+      onDismiss={handleUpdateDismiss}
       onDownload={async () => {
         setUpdateState({ status: "downloading", percent: 0 });
         const result = await window.inix?.update.download();
@@ -998,7 +1028,7 @@ export default function App() {
     return (
       <>
         <BootSplash
-          ready={sessionReady && !!activeTab && updateCheckDone}
+          ready={sessionReady && !!activeTab && updateCheckDone && !bootBlockedByUpdate}
           statusText={bootStatus}
           onFinish={() => setBootDone(true)}
         />
@@ -1057,13 +1087,11 @@ export default function App() {
 
   return (
     <div className={`inix-shell${sidebarOpen ? " sidebar-open" : ""}${immersive ? " immersive" : ""}${bookmarkBarEnabled ? " bookmark-bar-open" : ""}`}>
-      <TitleBar
+      <BrowserHeader
         onOpenSettings={openSettings}
         onOpenLibrary={openLibrary}
         onPanic={() => void togglePanic()}
         privateWindow={privateWindow}
-      />
-      <TabBar
         tabs={tabs}
         activeTabId={activeTabId}
         onSelect={setActiveTabId}
@@ -1079,7 +1107,6 @@ export default function App() {
         ref={addressBarRef}
         tab={activeTab}
         onNavigate={navigate}
-        onNewTab={() => addTab()}
         onBack={() => browser()?.goBack(activeTabId)}
         onForward={() => browser()?.goForward(activeTabId)}
         onReload={() => {
@@ -1090,7 +1117,6 @@ export default function App() {
         onOpenSearch={() => setSearchOpen(true)}
         onToggleAI={() => setSidebarOpen((v) => !v)}
         onToggleBookmark={toggleBookmark}
-        onOpenLibrary={openLibrary}
         onOpenDownloads={() => setDownloadsOpen(true)}
         onReaderMode={() => void openReaderMode()}
         bookmarked={bookmarked}

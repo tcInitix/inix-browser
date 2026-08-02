@@ -337,6 +337,7 @@ export interface InixAPI {
     onProgress: (callback: (progress: { percent: number }) => void) => () => void;
     onReady: (callback: (info: { version: string }) => void) => () => void;
     onError: (callback: (err: { message: string }) => void) => () => void;
+    onNotes: (callback: (info: { version: string; releaseNotes: string }) => void) => () => void;
   };
   ai: {
     getStatus: () => Promise<EngineStatus>;

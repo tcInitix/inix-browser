@@ -1,6 +1,17 @@
 import { useState, useEffect, forwardRef, useImperativeHandle, useRef, type FormEvent, type KeyboardEvent } from "react";
 import type { Tab } from "../types";
 import { isShellUrl } from "../types";
+import {
+  IconBack,
+  IconBookmark,
+  IconDownload,
+  IconForward,
+  IconHome,
+  IconReader,
+  IconReload,
+  IconSearch,
+  IconSparkle,
+} from "./chrome/ChromeIcons";
 import { RelayBadge, RelayPopover, useRelayState } from "./RelayPopover";
 
 export const INIX_BOOKMARK_DRAG = "application/x-inix-bookmark";
@@ -12,7 +23,6 @@ export interface AddressBarHandle {
 interface NavBarProps {
   tab: Tab;
   onNavigate: (url: string) => void | Promise<void>;
-  onNewTab: () => void;
   onBack: () => void;
   onForward: () => void;
   onReload: () => void;
@@ -20,7 +30,6 @@ interface NavBarProps {
   onOpenSearch: () => void;
   onToggleAI: () => void;
   onToggleBookmark: () => void;
-  onOpenLibrary: () => void;
   onOpenDownloads: () => void;
   onReaderMode: () => void;
   bookmarked: boolean;
@@ -32,7 +41,6 @@ export const NavBar = forwardRef<AddressBarHandle, NavBarProps>(function NavBar(
   {
     tab,
     onNavigate,
-    onNewTab,
     onBack,
     onForward,
     onReload,
@@ -40,7 +48,6 @@ export const NavBar = forwardRef<AddressBarHandle, NavBarProps>(function NavBar(
     onOpenSearch,
     onToggleAI,
     onToggleBookmark,
-    onOpenLibrary,
     onOpenDownloads,
     onReaderMode,
     bookmarked,
@@ -108,27 +115,21 @@ export const NavBar = forwardRef<AddressBarHandle, NavBarProps>(function NavBar(
 
   return (
     <nav className="nav-bar">
-      <div className="nav-controls">
+      <div className="nav-group nav-group-travel">
         <button className="nav-btn" disabled={!tab.canGoBack} title="Back" onClick={onBack}>
-          ←
+          <IconBack size={15} />
         </button>
         <button className="nav-btn" disabled={!tab.canGoForward} title="Forward" onClick={onForward}>
-          →
+          <IconForward size={15} />
         </button>
         <button className="nav-btn" title="Reload" onClick={onReload}>
-          ↻
+          <IconReload size={15} />
         </button>
         <button className="nav-btn" title="Home (Alt+Home)" onClick={onHome}>
-          ⌂
-        </button>
-        <button
-          className={`nav-btn${bookmarked ? " nav-btn-active" : ""}`}
-          title={bookmarked ? "Remove bookmark" : "Bookmark page"}
-          onClick={onToggleBookmark}
-        >
-          {bookmarked ? "★" : "☆"}
+          <IconHome size={15} />
         </button>
       </div>
+
       <div className="address-form-wrap">
         <RelayBadge
           state={relayState}
@@ -149,73 +150,77 @@ export const NavBar = forwardRef<AddressBarHandle, NavBarProps>(function NavBar(
               : undefined
           }
         />
-      <form className="address-form" onSubmit={handleSubmit}>
-        {canDragSite && (
-          <div
-            className="address-site-chip"
-            draggable
-            title="Drag to bookmarks bar to save"
-            onDragStart={(e) => {
-              e.dataTransfer.setData(
-                INIX_BOOKMARK_DRAG,
-                JSON.stringify({ url: tab.url, title: tab.title, tabId: tab.id })
-              );
-              e.dataTransfer.effectAllowed = "copy";
-              if (tab.favicon) {
-                const img = new Image();
-                img.src = tab.favicon;
-                e.dataTransfer.setDragImage(img, 8, 8);
-              }
-            }}
-          >
-            {tab.favicon ? (
-              <img src={tab.favicon} alt="" className="address-site-chip-icon" />
-            ) : (
-              <span className="address-site-chip-icon address-site-chip-globe">◉</span>
-            )}
-            {showSecure && (
-              <span className={`address-site-chip-lock ${securityState}`} title={securityTitle}>
-                {securityIcon}
-              </span>
-            )}
-          </div>
-        )}
-        <button type="button" className="address-search-btn" title="Inix Search (/)" onClick={onOpenSearch}>
-          ⌕
-        </button>
-        <input
-          ref={inputRef}
-          className="address-input"
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Search or enter a URL · type / for history search"
-          spellCheck={false}
-        />
-      </form>
+        <form className="address-form" onSubmit={handleSubmit}>
+          {canDragSite && (
+            <div
+              className="address-site-chip"
+              draggable
+              title="Drag to bookmarks bar to save"
+              onDragStart={(e) => {
+                e.dataTransfer.setData(
+                  INIX_BOOKMARK_DRAG,
+                  JSON.stringify({ url: tab.url, title: tab.title, tabId: tab.id })
+                );
+                e.dataTransfer.effectAllowed = "copy";
+                if (tab.favicon) {
+                  const img = new Image();
+                  img.src = tab.favicon;
+                  e.dataTransfer.setDragImage(img, 8, 8);
+                }
+              }}
+            >
+              {tab.favicon ? (
+                <img src={tab.favicon} alt="" className="address-site-chip-icon" />
+              ) : (
+                <span className="address-site-chip-icon address-site-chip-globe">◉</span>
+              )}
+              {showSecure && (
+                <span className={`address-site-chip-lock ${securityState}`} title={securityTitle}>
+                  {securityIcon}
+                </span>
+              )}
+            </div>
+          )}
+          <button type="button" className="address-search-btn" title="Inix Search (/)" onClick={onOpenSearch}>
+            <IconSearch size={15} />
+          </button>
+          <input
+            ref={inputRef}
+            className="address-input"
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Search or enter address · / for history"
+            spellCheck={false}
+          />
+        </form>
       </div>
-      {!isShellUrl(tab.url) && (
-        <button className="nav-btn" title="Reader view" onClick={onReaderMode}>
-          📖
+
+      <div className="nav-group nav-group-page">
+        <button
+          className={`nav-btn${bookmarked ? " nav-btn-active" : ""}`}
+          title={bookmarked ? "Remove bookmark" : "Bookmark page"}
+          onClick={onToggleBookmark}
+        >
+          <IconBookmark size={15} filled={bookmarked} />
         </button>
-      )}
-      <button className="nav-btn" title="Downloads" onClick={onOpenDownloads}>
-        ↓
-      </button>
-      <button
-        className={`nav-btn nav-btn-ai${aiOpen ? " nav-btn-active" : ""}`}
-        title="Toggle AI assistant"
-        onClick={onToggleAI}
-      >
-        ✦
-      </button>
-      <button className="nav-btn" title="Inix Library" onClick={onOpenLibrary}>
-        ★
-      </button>
-      <button className="nav-btn nav-btn-new" onClick={onNewTab} title="New tab">
-        +
-      </button>
+        {!isShellUrl(tab.url) && (
+          <button className="nav-btn" title="Reader view" onClick={onReaderMode}>
+            <IconReader size={15} />
+          </button>
+        )}
+        <button className="nav-btn" title="Downloads" onClick={onOpenDownloads}>
+          <IconDownload size={15} />
+        </button>
+        <button
+          className={`nav-btn nav-btn-ai${aiOpen ? " nav-btn-active" : ""}`}
+          title="Toggle AI assistant"
+          onClick={onToggleAI}
+        >
+          <IconSparkle size={15} />
+        </button>
+      </div>
     </nav>
   );
 });

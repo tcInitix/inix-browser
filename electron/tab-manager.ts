@@ -23,8 +23,8 @@ import {
 import { getSettings } from "./storage/settings";
 import { getAutofillBootstrapScript } from "./autofill/inject";
 
-export const BASE_TOP_CHROME = 132;
-export const BOOKMARK_BAR_HEIGHT = 36;
+export const BASE_TOP_CHROME = 90;
+export const BOOKMARK_BAR_HEIGHT = 34;
 export const TOP_CHROME = BASE_TOP_CHROME;
 
 export const BOTTOM_CHROME = 32;
