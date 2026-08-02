@@ -1,4 +1,5 @@
-import { type FormEvent } from "react";
+import { type FormEvent, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 
 interface VaultUnlockModalProps {
   open: boolean;
@@ -8,6 +9,22 @@ interface VaultUnlockModalProps {
 }
 
 export function VaultUnlockModal({ open, onClose, onUnlocked, setupMode }: VaultUnlockModalProps) {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    void window.inix?.window.setTypingCapture(true);
+    void window.inix?.browser.hide();
+    const frame = requestAnimationFrame(() => {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    });
+    return () => {
+      cancelAnimationFrame(frame);
+      void window.inix?.window.setTypingCapture(false);
+    };
+  }, [open]);
+
   if (!open) return null;
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
@@ -25,8 +42,12 @@ export function VaultUnlockModal({ open, onClose, onUnlocked, setupMode }: Vault
     }
   };
 
-  return (
-    <div className="vault-overlay" onClick={onClose}>
+  return createPortal(
+    <div
+      className="vault-overlay"
+      onClick={onClose}
+      onMouseDown={(e) => e.stopPropagation()}
+    >
       <div className="vault-modal" onClick={(e) => e.stopPropagation()}>
         <h2>{setupMode ? "Set Vault Password" : "Unlock History Vault"}</h2>
         <p className="vault-warning">
@@ -37,7 +58,14 @@ export function VaultUnlockModal({ open, onClose, onUnlocked, setupMode }: Vault
         <form onSubmit={(e) => void handleSubmit(e)}>
           <label>
             Master password
-            <input name="password" type="password" autoFocus required minLength={4} />
+            <input
+              ref={inputRef}
+              name="password"
+              type="password"
+              required
+              minLength={4}
+              autoComplete={setupMode ? "new-password" : "current-password"}
+            />
           </label>
           <div className="vault-actions">
             <button type="button" onClick={onClose}>
@@ -47,6 +75,7 @@ export function VaultUnlockModal({ open, onClose, onUnlocked, setupMode }: Vault
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

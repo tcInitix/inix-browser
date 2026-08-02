@@ -1050,6 +1050,11 @@ export class TabManager {
 
     state.activeTabId = null;
 
+    // Return keyboard focus to the shell UI (history/settings modals, etc.)
+    if (!win.webContents.isDestroyed()) {
+      win.webContents.focus();
+    }
+
   }
 
 

@@ -247,6 +247,7 @@ export interface InixAPI {
     onFullscreenChanged: (callback: (fullscreen: boolean) => void) => () => void;
     getMode: () => Promise<{ privateWindow: boolean; profileId: string }>;
     openPrivate: () => Promise<boolean>;
+    setTypingCapture: (active: boolean) => Promise<boolean>;
   };
   browser: {
     createTab: (tabId: string, isPrivate?: boolean) => Promise<void>;

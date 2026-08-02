@@ -75,6 +75,7 @@ function wireMainWindow(win: BrowserWindow, isPrivateWindow = false, profileId =
     __inixWired?: boolean;
     __inixPrivateWindow?: boolean;
     __inixProfileId?: string;
+    __inixTypingCapture?: boolean;
   };
   if (tagged.__inixWired) return;
   tagged.__inixWired = true;
@@ -90,6 +91,7 @@ function wireMainWindow(win: BrowserWindow, isPrivateWindow = false, profileId =
   });
 
   win.webContents.on("before-input-event", (event, input) => {
+    if (tagged.__inixTypingCapture) return;
     const action = matchShortcut(input);
     if (action) {
       event.preventDefault();
@@ -199,6 +201,16 @@ function registerMainIpcHandlers() {
 
   ipcMain.handle("window:open-private", () => {
     createWindow(true);
+    return true;
+  });
+
+  ipcMain.handle("window:set-typing-capture", (e, active: boolean) => {
+    const win = winFromEvent(e);
+    if (!win) return false;
+    (win as BrowserWindow & { __inixTypingCapture?: boolean }).__inixTypingCapture = active;
+    if (active && !win.webContents.isDestroyed()) {
+      win.webContents.focus();
+    }
     return true;
   });
 

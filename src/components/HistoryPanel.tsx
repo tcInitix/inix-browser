@@ -68,8 +68,8 @@ export function HistoryPanel({ open, onClose, onNavigate }: HistoryPanelProps) {
   }, []);
 
   useEffect(() => {
-    if (open) listRef.current?.focus();
-  }, [open]);
+    if (open && !vaultOpen) listRef.current?.focus();
+  }, [open, vaultOpen]);
 
   useEffect(() => {
     if (!open) return;

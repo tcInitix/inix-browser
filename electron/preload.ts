@@ -62,6 +62,8 @@ contextBridge.exposeInMainWorld("inix", {
     },
     getMode: () => ipcRenderer.invoke("window:get-mode") as Promise<{ privateWindow: boolean }>,
     openPrivate: () => ipcRenderer.invoke("window:open-private") as Promise<boolean>,
+    setTypingCapture: (active: boolean) =>
+      ipcRenderer.invoke("window:set-typing-capture", active) as Promise<boolean>,
   },
   browser: {
     createTab: (tabId: string, isPrivate?: boolean) => ipcRenderer.invoke("tab:create", tabId, isPrivate),
