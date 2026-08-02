@@ -67,7 +67,7 @@
       "perMachine": false,
       "allowElevation": true,
       "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": "alwaysIfDoesNotExist",
+      "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "Inix",
       "installerSidebar": "build/installerSidebar.bmp",
