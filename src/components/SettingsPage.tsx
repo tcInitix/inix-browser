@@ -218,7 +218,7 @@ export function SettingsPage({
   const [tabFreezeEnabled, setTabFreezeEnabled] = useState(true);
   const [tabFreezeMinutes, setTabFreezeMinutes] = useState(30);
   const [historyMode, setHistoryMode] = useState<"standard" | "transient" | "vaulted">("standard");
-  const [transientPurgeOnClose, setTransientPurgeOnClose] = useState(true);
+  const [historyPurgeOnClose, setHistoryPurgeOnClose] = useState<"none" | "transient" | "non_vaulted">("transient");
   const [transientRetentionHours, setTransientRetentionHours] = useState(24);
   const [homepageUrl, setHomepageUrl] = useState("inix://newtab");
   const [newTabUseHomepage, setNewTabUseHomepage] = useState(false);
@@ -294,7 +294,7 @@ export function SettingsPage({
       setTabFreezeEnabled(s.tab_freeze_enabled);
       setTabFreezeMinutes(s.tab_freeze_minutes);
       setHistoryMode(s.history_mode);
-      setTransientPurgeOnClose(s.transient_purge_on_close);
+      setHistoryPurgeOnClose(s.history_purge_on_close);
       setTransientRetentionHours(s.transient_retention_hours);
       setHomepageUrl(s.homepage_url || "inix://newtab");
       setNewTabUseHomepage(s.new_tab_use_homepage);
@@ -638,7 +638,7 @@ export function SettingsPage({
     await s.set("tab_freeze_enabled", tabFreezeEnabled ? "true" : "false");
     await s.set("tab_freeze_minutes", String(tabFreezeMinutes));
     await s.set("history_mode", historyMode);
-    await s.set("transient_purge_on_close", transientPurgeOnClose ? "true" : "false");
+    await s.set("history_purge_on_close", historyPurgeOnClose);
     await s.set("transient_retention_hours", String(transientRetentionHours));
     await s.set("homepage_url", homepageUrl.trim() || "inix://newtab");
     await s.set("new_tab_use_homepage", newTabUseHomepage ? "true" : "false");
@@ -1401,12 +1401,22 @@ export function SettingsPage({
                   <option value="vaulted">Vaulted — encrypted behind master password</option>
                 </select>
               </label>
-              <Switch
-                className="settings-toggle"
-                checked={transientPurgeOnClose}
-                onChange={setTransientPurgeOnClose}
-                label="Purge transient history when Inix closes"
-              />
+              <label className="settings-field">
+                <span>When Inix closes</span>
+                <select
+                  value={historyPurgeOnClose}
+                  onChange={(e) =>
+                    setHistoryPurgeOnClose(e.target.value as typeof historyPurgeOnClose)
+                  }
+                >
+                  <option value="none">Keep all history</option>
+                  <option value="transient">Delete transient history only</option>
+                  <option value="non_vaulted">Delete all history except vault</option>
+                </select>
+                <p className="settings-note">
+                  Vault-protected entries are always kept unless you clear them manually.
+                </p>
+              </label>
               <label className="settings-field">
                 <span>Transient retention (hours)</span>
                 <input

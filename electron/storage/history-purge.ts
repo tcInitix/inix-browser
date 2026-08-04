@@ -1,5 +1,5 @@
-import { getSetting } from "./settings";
-import { purgeAllTransient, purgeTransientHistory } from "./history";
+import { parseHistoryPurgeOnClose } from "./settings";
+import { purgeAllTransient, purgeTransientHistory, clearHistory } from "./history";
 
 let hourlyTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -19,7 +19,10 @@ export function stopHistoryPurgeScheduler(): void {
 }
 
 export function purgeOnAppClose(): void {
-  if (getSetting("transient_purge_on_close") !== "false") {
+  const mode = parseHistoryPurgeOnClose();
+  if (mode === "non_vaulted") {
+    clearHistory();
+  } else if (mode === "transient") {
     purgeAllTransient();
   } else {
     purgeTransientHistory();

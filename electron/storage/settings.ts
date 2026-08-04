@@ -16,6 +16,14 @@ export type UiFontScale = "small" | "medium" | "large";
 export type PermissionDefault = "ask" | "allow" | "block";
 export type TabBarOrientation = "horizontal" | "vertical";
 
+export type HistoryPurgeOnClose = "none" | "transient" | "non_vaulted";
+
+export function parseHistoryPurgeOnClose(): HistoryPurgeOnClose {
+  const mode = getSetting("history_purge_on_close");
+  if (mode === "none" || mode === "transient" || mode === "non_vaulted") return mode;
+  return getSetting("transient_purge_on_close") === "false" ? "none" : "transient";
+}
+
 export function getSetting(key: string): string {
   const rows = runQuery<{ value: string }>("SELECT value FROM settings WHERE key = ?", [key]);
   return rows[0]?.value ?? "";
@@ -44,7 +52,7 @@ export interface Settings {
   tab_freeze_enabled: boolean;
   tab_freeze_minutes: number;
   history_mode: "standard" | "transient" | "vaulted";
-  transient_purge_on_close: boolean;
+  history_purge_on_close: HistoryPurgeOnClose;
   transient_retention_hours: number;
   homepage_url: string;
   new_tab_use_homepage: boolean;
@@ -198,7 +206,7 @@ export function getSettings(): Settings {
     tab_freeze_minutes: parseIntSetting(getSetting("tab_freeze_minutes"), 30),
     history_mode:
       historyMode === "transient" || historyMode === "vaulted" ? historyMode : "standard",
-    transient_purge_on_close: parseBoolDefaultTrue(getSetting("transient_purge_on_close")),
+    history_purge_on_close: parseHistoryPurgeOnClose(),
     transient_retention_hours: parseIntSetting(getSetting("transient_retention_hours"), 24),
     homepage_url: getSetting("homepage_url") || "inix://newtab",
     new_tab_use_homepage: parseBool(getSetting("new_tab_use_homepage")),

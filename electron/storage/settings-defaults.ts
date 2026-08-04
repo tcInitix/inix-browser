@@ -12,7 +12,7 @@ export const DEFAULT_SETTINGS: Record<string, string> = {
   tab_freeze_enabled: "true",
   tab_freeze_minutes: "30",
   history_mode: "standard",
-  transient_purge_on_close: "true",
+  history_purge_on_close: "transient",
   transient_retention_hours: "24",
   homepage_url: "inix://newtab",
   new_tab_use_homepage: "false",

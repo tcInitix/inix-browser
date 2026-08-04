@@ -29,6 +29,8 @@ export interface RelayState {
   configured: boolean;
 }
 
+export type HistoryPurgeOnClose = "none" | "transient" | "non_vaulted";
+
 export interface InixSettings {
   ai_provider: "local" | "api";
   engine_host: string;
@@ -42,7 +44,7 @@ export interface InixSettings {
   tab_freeze_enabled: boolean;
   tab_freeze_minutes: number;
   history_mode: HistoryTier;
-  transient_purge_on_close: boolean;
+  history_purge_on_close: HistoryPurgeOnClose;
   transient_retention_hours: number;
   homepage_url: string;
   new_tab_use_homepage: boolean;

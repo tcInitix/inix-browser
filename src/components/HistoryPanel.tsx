@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { HistoryEntry, HistoryTier, VaultEntry } from "../types";
 import { VaultUnlockModal } from "./VaultUnlockModal";
 
@@ -44,7 +44,6 @@ export function HistoryPanel({ open, onClose, onNavigate }: HistoryPanelProps) {
   const [vaultOpen, setVaultOpen] = useState(false);
   const [vaultConfigured, setVaultConfigured] = useState(false);
   const [vaultUnlocked, setVaultUnlocked] = useState(false);
-  const listRef = useRef<HTMLUListElement>(null);
 
   const loadHistory = useCallback(async () => {
     const tierArg = tier === "all" ? undefined : tier;
@@ -66,10 +65,6 @@ export function HistoryPanel({ open, onClose, onNavigate }: HistoryPanelProps) {
       setVaultEntries([]);
     }
   }, []);
-
-  useEffect(() => {
-    if (open && !vaultOpen) listRef.current?.focus();
-  }, [open, vaultOpen]);
 
   useEffect(() => {
     if (!open) return;
@@ -186,7 +181,7 @@ export function HistoryPanel({ open, onClose, onNavigate }: HistoryPanelProps) {
             </div>
           </div>
 
-          <ul className="history-results" ref={listRef} tabIndex={-1}>
+          <ul className="history-results">
             {showVault
               ? vaultEntries.map((entry) => (
                   <li key={entry.id}>

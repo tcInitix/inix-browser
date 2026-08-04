@@ -4611,6 +4611,7 @@ h3,
   list-style: none;
   overflow-y: auto;
   flex: 1;
+  outline: none;
 }
 
 .history-result {
