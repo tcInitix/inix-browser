@@ -1,7 +1,6 @@
 import { useRef, useState } from "react";
 import type { Tab } from "../types";
 import { IconClose, IconPlus } from "./chrome/ChromeIcons";
-import { useChromeOverlay } from "../chrome/ChromeOverlayContext";
 
 const GROUP_COLORS: { id: string; label: string; hex: string }[] = [
   { id: "gray", label: "Gray", hex: "#8a8f98" },
@@ -46,10 +45,13 @@ export function TabBar({
   embedded = false,
 }: TabBarProps) {
   const dragIndex = useRef<number | null>(null);
-  const [contextMenu, setContextMenu] = useState<{ tabId: string; x: number; y: number } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{
+    tabId: string;
+    x: number;
+    y: number;
+    openUp: boolean;
+  } | null>(null);
   const [groupSubmenuOpen, setGroupSubmenuOpen] = useState(false);
-
-  useChromeOverlay("tab-context-menu", contextMenu !== null);
 
   const sortedTabs = [...tabs].sort((a, b) => {
     if (a.pinned && !b.pinned) return -1;
@@ -101,7 +103,21 @@ export function TabBar({
             }}
             onContextMenu={(e) => {
               e.preventDefault();
-              setContextMenu({ tabId: tab.id, x: e.clientX, y: e.clientY });
+              const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+              const x = Math.min(e.clientX, window.innerWidth - 180);
+              const y = rect.bottom + 4;
+              const contentTop =
+                document.querySelector(".content-area")?.getBoundingClientRect().top ??
+                document.querySelector(".nav-bar")?.getBoundingClientRect().bottom ??
+                document.querySelector(".browser-header")?.getBoundingClientRect().bottom ??
+                90;
+              const openUp = y + 280 > contentTop;
+              setContextMenu({
+                tabId: tab.id,
+                x,
+                y: openUp ? rect.top - 4 : y,
+                openUp,
+              });
             }}
             onDragStart={() => handleDragStart(tabs.indexOf(tab))}
             onDragOver={(e) => e.preventDefault()}
@@ -190,7 +206,11 @@ export function TabBar({
           />
           <menu
             className="tab-context-menu"
-            style={{ left: contextMenu.x, top: contextMenu.y }}
+            style={{
+              left: contextMenu.x,
+              top: contextMenu.y,
+              transform: contextMenu.openUp ? "translateY(-100%)" : undefined,
+            }}
           >
             <button
               onClick={() => {

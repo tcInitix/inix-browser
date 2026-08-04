@@ -118,7 +118,6 @@ export default function App() {
   const addressBarRef = useRef<AddressBarHandle>(null);
   const focusAddressBarForTabRef = useRef<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const restored = useRef(false);
   const bootDoneRef = useRef(false);
   bootDoneRef.current = bootDone;
 
@@ -171,7 +170,6 @@ export default function App() {
         setTabs([tab]);
         setActiveTabId(tab.id);
         queueAddressBarFocus(tab.id);
-        restored.current = true;
         setSessionReady(true);
         return;
       }
@@ -220,7 +218,6 @@ export default function App() {
         setActiveTabId(tab.id);
         queueAddressBarFocus(tab.id);
       }
-      restored.current = true;
       setSessionReady(true);
     })();
   }, []);
@@ -365,24 +362,15 @@ export default function App() {
     for (const tab of tabs) {
       if (!initialized.current.has(tab.id) && !tab.frozen) {
         initialized.current.add(tab.id);
-        void b.createTab(tab.id, !!tab.private);
+        void (async () => {
+          await b.createTab(tab.id, !!tab.private);
+          if (!isShellUrl(tab.url)) {
+            await b.navigate(tab.id, tab.url);
+          }
+        })();
       }
     }
   }, [tabs, sessionReady]);
-
-  useEffect(() => {
-    if (!sessionReady || !restored.current) return;
-    const b = browser();
-    if (!b) return;
-
-    for (const tab of tabs) {
-      if (tab.frozen) continue;
-      if (!isShellUrl(tab.url)) {
-        void b.navigate(tab.id, tab.url);
-      }
-    }
-    restored.current = false;
-  }, [sessionReady]);
 
   useEffect(() => {
     const b = browser();
