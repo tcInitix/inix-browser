@@ -1,11 +1,11 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import type { Session } from "electron";
 import type { SqlValue } from "sql.js";
 import { getChromiumEncryptionKey, decryptChromiumAesGcm } from "../import/chromium-crypto";
 import { dpapiUnprotect, isDpapiAvailable } from "../import/dpapi";
 import { queryExternalSqlite } from "../import/sqlite-read";
+import { formatLockedBrowserDbError, snapshotChromiumSqlite } from "../import/sqlite-snapshot";
 import type { AuthBrowser } from "./browser-launcher";
 
 export interface GoogleCookieImportResult {
@@ -54,21 +54,6 @@ function cookiesDbPath(userDataDir: string, profileId = "Default"): string | nul
   if (fs.existsSync(network)) return network;
   const legacy = path.join(userDataDir, profileId, "Cookies");
   return fs.existsSync(legacy) ? legacy : null;
-}
-
-function copyForRead(src: string): { path: string; cleanup: () => void } {
-  const tmp = path.join(os.tmpdir(), `inix-cookies-${Date.now()}-${path.basename(src)}`);
-  fs.copyFileSync(src, tmp);
-  return {
-    path: tmp,
-    cleanup: () => {
-      try {
-        fs.unlinkSync(tmp);
-      } catch {
-        // ignore
-      }
-    },
-  };
 }
 
 function toBuffer(value: unknown): Buffer {
@@ -149,11 +134,23 @@ export async function importGoogleCookiesIntoSession(
 
   const localStatePath = path.join(userDataDir, "Local State");
   const aesKey = fs.existsSync(localStatePath) ? getChromiumEncryptionKey(localStatePath) : null;
-  const snapshot = copyForRead(dbPath);
+  const browserLabel = browser === "chrome" ? "Chrome" : "Microsoft Edge";
+
+  let snapshot: Awaited<ReturnType<typeof snapshotChromiumSqlite>>;
+  try {
+    snapshot = await snapshotChromiumSqlite(dbPath, "inix-cookies");
+  } catch (err) {
+    return {
+      ok: false,
+      imported: 0,
+      skipped: 0,
+      error: formatLockedBrowserDbError(browserLabel, err),
+    };
+  }
 
   try {
     const rows = await queryExternalSqlite<CookieRow>(
-      snapshot.path,
+      snapshot.dbPath,
       `SELECT host_key, name, value, encrypted_value, path, expires_utc, is_secure, is_httponly, samesite
        FROM cookies`
     );
@@ -203,15 +200,19 @@ export async function importGoogleCookiesIntoSession(
         skipped,
         error:
           skipped > 0
-            ? "No Google cookies could be imported. Close Chrome/Edge completely and try again."
+            ? `No Google cookies could be imported. Close all ${browserLabel} windows and try again.`
             : "No Google sign-in cookies were found. Finish signing in with Google in your browser first.",
       };
     }
 
     return { ok: true, imported, skipped };
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return { ok: false, imported: 0, skipped: 0, error: msg };
+    return {
+      ok: false,
+      imported: 0,
+      skipped: 0,
+      error: formatLockedBrowserDbError(browserLabel, err),
+    };
   } finally {
     snapshot.cleanup();
   }

@@ -52,6 +52,9 @@ export function GoogleAuthPrompt({ session, onComplete, onCancel, onReopen }: Go
           <li>Complete the Google sign-in in {session.browserLabel}</li>
           <li>Return to Inix and click <strong>Import session</strong></li>
         </ol>
+        <p className="google-auth-note">
+          {session.browserLabel} can stay open. If import fails, close every {session.browserLabel} window and try again.
+        </p>
         {error && <p className="google-auth-error">{error}</p>}
         <div className="permission-actions">
           <button className="permission-deny" onClick={onCancel} disabled={busy}>
