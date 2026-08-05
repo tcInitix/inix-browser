@@ -11,6 +11,19 @@ function escapePsSingleQuoted(value: string): string {
 
 /** Copy a file that may be locked by Chrome/Edge using shared read access on Windows. */
 function copyFileForRead(src: string, dest: string): void {
+  const dir = path.dirname(dest);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+
+  try {
+    fs.copyFileSync(src, dest);
+    return;
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException)?.code;
+    if (process.platform !== "win32" || (code !== "EBUSY" && code !== "EPERM")) {
+      throw err;
+    }
+  }
+
   if (process.platform === "win32") {
     const script = `
 $src = '${escapePsSingleQuoted(src)}'
@@ -19,19 +32,20 @@ $dir = [System.IO.Path]::GetDirectoryName($dest)
 if (-not [System.IO.Directory]::Exists($dir)) {
   [void][System.IO.Directory]::CreateDirectory($dir)
 }
-$fs = [System.IO.File]::Open(
-  $src,
-  [System.IO.FileMode]::Open,
-  [System.IO.FileAccess]::Read,
-  [System.IO.FileShare]::ReadWrite -bor [System.IO.FileShare]::Delete
-)
+$fs = $null
 try {
+  $fs = [System.IO.File]::Open(
+    $src,
+    [System.IO.FileMode]::Open,
+    [System.IO.FileAccess]::Read,
+    [System.IO.FileShare]::ReadWrite -bor [System.IO.FileShare]::Delete
+  )
   $len = $fs.Length
   $bytes = New-Object byte[] $len
   [void]$fs.Read($bytes, 0, $len)
   [System.IO.File]::WriteAllBytes($dest, $bytes)
 } finally {
-  $fs.Close()
+  if ($null -ne $fs) { $fs.Close() }
 }
 `;
     execFileSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], {
@@ -101,8 +115,11 @@ export async function snapshotChromiumSqlite(dbPath: string, label = "inix-sqlit
 
 export function formatLockedBrowserDbError(browserLabel: string, err: unknown): string {
   const msg = err instanceof Error ? err.message : String(err);
-  if (/EBUSY|resource busy|locked/i.test(msg)) {
-    return `Close the ${browserLabel} sign-in window Inix opened, then click Import session again.`;
+  if (/EBUSY|resource busy|locked|cannot access the file/i.test(msg)) {
+    return `Could not read cookies from the ${browserLabel} sign-in window. Click Import session again — Inix will close that window automatically.`;
+  }
+  if (/Command failed: powershell/i.test(msg)) {
+    return `Could not read cookies from the ${browserLabel} sign-in window. Click Import session again.`;
   }
   return msg;
 }

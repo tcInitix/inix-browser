@@ -6,7 +6,7 @@ import { getChromiumEncryptionKey, decryptChromiumAesGcm } from "../import/chrom
 import { dpapiUnprotect, isDpapiAvailable } from "../import/dpapi";
 import { queryExternalSqlite } from "../import/sqlite-read";
 import { formatLockedBrowserDbError, snapshotChromiumSqlite } from "../import/sqlite-snapshot";
-import { getAuthBrowserUserDataDir, type AuthBrowser } from "./browser-launcher";
+import { getAuthBrowserUserDataDir, prepareAuthBrowserForImport, type AuthBrowser } from "./browser-launcher";
 
 export interface GoogleCookieImportResult {
   ok: boolean;
@@ -129,6 +129,8 @@ export async function importGoogleCookiesIntoSession(
   const localStatePath = path.join(userDataDir, "Local State");
   const aesKey = fs.existsSync(localStatePath) ? getChromiumEncryptionKey(localStatePath) : null;
   const browserLabel = browser === "chrome" ? "Chrome" : "Microsoft Edge";
+
+  await prepareAuthBrowserForImport(browser);
 
   let snapshot: Awaited<ReturnType<typeof snapshotChromiumSqlite>>;
   try {

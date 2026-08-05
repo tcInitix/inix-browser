@@ -55,11 +55,10 @@ export function GoogleAuthPrompt({ session, onComplete, onCancel, onReopen }: Go
         </p>
         <ol className="google-auth-steps">
           <li>Sign in with Google in the {session.browserLabel} window Inix opened</li>
-          <li>Close that {session.browserLabel} window when you are done</li>
-          <li>Return here and click <strong>Import session</strong></li>
+          <li>Click <strong>Import session</strong> — Inix closes that window and copies your login</li>
         </ol>
         <p className="google-auth-note">
-          Your regular {session.browserLabel} windows can stay open. Only close the sign-in window Inix launched.
+          Your regular {session.browserLabel} windows are not affected. You can leave them open.
         </p>
         {error && <p className="google-auth-error">{error}</p>}
         <div className="permission-actions">
