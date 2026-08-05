@@ -9,6 +9,11 @@ interface GoogleAuthPromptProps {
   onReopen: () => void;
 }
 
+function friendlyImportError(message: string): string {
+  const ipcMatch = message.match(/Error invoking remote method '[^']+':(?: Error:)?\s*(.+)$/i);
+  return ipcMatch?.[1]?.trim() || message;
+}
+
 export function GoogleAuthPrompt({ session, onComplete, onCancel, onReopen }: GoogleAuthPromptProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,7 +39,7 @@ export function GoogleAuthPrompt({ session, onComplete, onCancel, onReopen }: Go
     try {
       await onComplete();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(friendlyImportError(err instanceof Error ? err.message : String(err)));
     } finally {
       setBusy(false);
     }
@@ -45,15 +50,16 @@ export function GoogleAuthPrompt({ session, onComplete, onCancel, onReopen }: Go
       <div className="permission-prompt google-auth-prompt">
         <h3>Sign in with Google</h3>
         <p>
-          Google blocks sign-in inside Inix. Finish signing in in{" "}
-          <strong>{session.browserLabel}</strong>, then import your session back here.
+          Google blocks sign-in inside Inix. Inix opens a separate{" "}
+          <strong>{session.browserLabel}</strong> window for sign-in — not your everyday browser profile.
         </p>
         <ol className="google-auth-steps">
-          <li>Complete the Google sign-in in {session.browserLabel}</li>
-          <li>Return to Inix and click <strong>Import session</strong></li>
+          <li>Sign in with Google in the {session.browserLabel} window Inix opened</li>
+          <li>Close that {session.browserLabel} window when you are done</li>
+          <li>Return here and click <strong>Import session</strong></li>
         </ol>
         <p className="google-auth-note">
-          {session.browserLabel} can stay open. If import fails, close every {session.browserLabel} window and try again.
+          Your regular {session.browserLabel} windows can stay open. Only close the sign-in window Inix launched.
         </p>
         {error && <p className="google-auth-error">{error}</p>}
         <div className="permission-actions">

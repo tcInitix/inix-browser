@@ -23,33 +23,38 @@ function getSessionForTab(tabId: string) {
 
 export function registerGoogleAuthHandlers(): void {
   ipcMain.handle("google-auth:complete", async (_e, tabId: string) => {
-    const pending = getPendingGoogleAuth(tabId);
-    if (!pending) {
-      return { ok: false, imported: 0, skipped: 0, error: "No pending Google sign-in for this tab." };
-    }
-
-    const sess = getSessionForTab(tabId);
-    if (!sess) {
-      return { ok: false, imported: 0, skipped: 0, error: "Could not access this tab's session." };
-    }
-
-    const result = await importGoogleCookiesIntoSession(sess, pending.browser);
-    if (!result.ok) {
-      return result;
-    }
-
-    const wc = tabManager.getWebContents(tabId);
-    if (wc && !wc.isDestroyed()) {
-      try {
-        await wc.loadURL(pending.returnUrl);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        return { ...result, ok: false, error: `Cookies imported but reload failed: ${msg}` };
+    try {
+      const pending = getPendingGoogleAuth(tabId);
+      if (!pending) {
+        return { ok: false, imported: 0, skipped: 0, error: "No pending Google sign-in for this tab." };
       }
-    }
 
-    clearPendingGoogleAuth(tabId);
-    return result;
+      const sess = getSessionForTab(tabId);
+      if (!sess) {
+        return { ok: false, imported: 0, skipped: 0, error: "Could not access this tab's session." };
+      }
+
+      const result = await importGoogleCookiesIntoSession(sess, pending.browser);
+      if (!result.ok) {
+        return result;
+      }
+
+      const wc = tabManager.getWebContents(tabId);
+      if (wc && !wc.isDestroyed()) {
+        try {
+          await wc.loadURL(pending.returnUrl);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          return { ...result, ok: false, error: `Cookies imported but reload failed: ${msg}` };
+        }
+      }
+
+      clearPendingGoogleAuth(tabId);
+      return result;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return { ok: false, imported: 0, skipped: 0, error: msg };
+    }
   });
 
   ipcMain.handle("google-auth:cancel", (_e, tabId: string) => {

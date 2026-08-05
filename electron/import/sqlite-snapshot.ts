@@ -102,7 +102,7 @@ export async function snapshotChromiumSqlite(dbPath: string, label = "inix-sqlit
 export function formatLockedBrowserDbError(browserLabel: string, err: unknown): string {
   const msg = err instanceof Error ? err.message : String(err);
   if (/EBUSY|resource busy|locked/i.test(msg)) {
-    return `${browserLabel} is still using its cookie database. Close every ${browserLabel} window and click Import session again.`;
+    return `Close the ${browserLabel} sign-in window Inix opened, then click Import session again.`;
   }
   return msg;
 }

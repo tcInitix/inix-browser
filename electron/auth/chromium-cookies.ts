@@ -6,7 +6,7 @@ import { getChromiumEncryptionKey, decryptChromiumAesGcm } from "../import/chrom
 import { dpapiUnprotect, isDpapiAvailable } from "../import/dpapi";
 import { queryExternalSqlite } from "../import/sqlite-read";
 import { formatLockedBrowserDbError, snapshotChromiumSqlite } from "../import/sqlite-snapshot";
-import type { AuthBrowser } from "./browser-launcher";
+import { getAuthBrowserUserDataDir, type AuthBrowser } from "./browser-launcher";
 
 export interface GoogleCookieImportResult {
   ok: boolean;
@@ -39,13 +39,7 @@ interface CookieRow extends Record<string, SqlValue> {
 }
 
 function getChromiumUserDataDir(browser: AuthBrowser): string | null {
-  if (process.platform !== "win32") return null;
-  const local = process.env.LOCALAPPDATA;
-  if (!local) return null;
-  const dir =
-    browser === "chrome"
-      ? path.join(local, "Google", "Chrome", "User Data")
-      : path.join(local, "Microsoft", "Edge", "User Data");
+  const dir = getAuthBrowserUserDataDir(browser);
   return fs.existsSync(dir) ? dir : null;
 }
 
@@ -123,7 +117,7 @@ export async function importGoogleCookiesIntoSession(
       ok: false,
       imported: 0,
       skipped: 0,
-      error: browser === "chrome" ? "Chrome profile data was not found." : "Edge profile data was not found.",
+      error: `No Inix sign-in profile found for ${browser === "chrome" ? "Chrome" : "Edge"}. Open ${browser === "chrome" ? "Chrome" : "Edge"} from this prompt and sign in first.`,
     };
   }
 
